@@ -1,6 +1,9 @@
 from case import Case, Const
 import numpy as np
+from scipy.optimize import *
+# from scipy.optimize import Bounds, LinearConstraint, NonlinearConstraint
 import pdb
+
 
 def runcopf(c):
     const = Const()
@@ -13,11 +16,12 @@ def runcopf(c):
     neqnln = 2*nb
     niqnln = nbr
 
+    ii = get_var_idx(c)
+
     x0 = np.concatenate((np.zeros(nb), \
                          c.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
                          c.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / c.mva_base, \
                          c.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / c.mva_base), axis=0)
-
 
     xmin = np.concatenate((-np.inf * np.ones(nb), \
                            c.bus.take(const.VMIN, axis=1), \
@@ -29,12 +33,29 @@ def runcopf(c):
                            c.gen.take(const.PMAX, axis=1) / c.mva_base, \
                            c.gen.take(const.QMAX, axis=1) / c.mva_base), axis=0)
 
-
-
     xmin[(c.bus.take(const.BUS_TYPE, axis=1) == 3).nonzero()] = 0
     xmax[(c.bus.take(const.BUS_TYPE, axis=1) == 3).nonzero()] = 0
     
     f = costfcn(x0,c)
+
+    bounds = Bounds(xmin, xmax)
+
+    simple_powerbalance = np.zeros(x0.shape[0])
+    tload = sum(c.bus[:,const.PD]) / c.mva_base
+    simple_powerbalance[ii['i1']['pg']:ii['iN']['pg']] = 1
+    simple_lincons = LinearConstraint(simple_powerbalance, tload, tload)
+
+    pdb.set_trace()
+
+    f_fcn = lambda x: costfcn(x, c)
+
+    res = minimize(f_fcn, x0, constraints=[simple_lincons], bounds=bounds)
+
+    print(tload)
+    print(res.x[ii['i1']['pg']:ii['iN']['pg']])
+    print(sum(res.x[ii['i1']['pg']:ii['iN']['pg']]))
+
+
     
 
 def costfcn(x, c):
@@ -54,7 +75,6 @@ def polycost(cost_metrics, pg):
     const = Const()
     cost = 0.
     pn = int(cost_metrics[const.NCOST])
-    pdb.set_trace()
     for pi in range(pn):
         cost += cost_metrics[-(1+pi)] * pg ** pi
     return cost
