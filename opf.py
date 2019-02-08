@@ -1,12 +1,13 @@
 from case import Case, Const
 import numpy as np
+from scipy.sparse import *
 from scipy.optimize import *
 from pdb import *
 
 
 def runcopf(c):
     const = Const()
-
+    
     nb     = c.bus.shape[0]
     ng     = c.gen.shape[0]
     nbr    = c.branch.shape[0]
@@ -16,6 +17,11 @@ def runcopf(c):
     niqnln = nbr
 
     ii = get_var_idx(c)
+
+    x0 = np.concatenate((deg2rad(c.bus.take(const.VA, axis=1)), \
+                         c.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
+                         c.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / c.mva_base, \
+                         c.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / c.mva_base), axis=0)
 
     x0 = np.concatenate((np.zeros(nb), \
                          c.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
@@ -55,22 +61,20 @@ def runcopf(c):
     ####################################################################
     # Nonlinear Power Flow Constraints (g: eqcons, h: ineqcons)
     ####################################################################   
-    # eqcons = NonlinearConstraint()
-    # ineqcons = NonlinearConstraint()
-    # eqcons = {'type': 'eq',
-    #           'fun' : lambda x: eqconsfcn(x, c),
-    #           'jac' : lambda x: eqconsfcn_jac(x,c)}
-              
-    # ineqcons = {'type': 'eq',
-    #             'fun' : lambda x: ineqconsfcn(x, c),
-    #             'jac' : lambda x: ineqconsfcn_jac(x,c)}
-
-
+    g_fcn = lambda x: acpf_consfcn(x, c)
+    # eqcons = NonlinearConstraint(g_fcn, -np.inf, 1, jac=dg_fcn, hess=d2g_fcn)
+    # ineqcons = NonlinearConstraint(h_fcn, -np.inf, 1, jac=dh_fcn, hess=d2h_fcn)
     res = minimize(f_fcn, x0, jac=df_fcn, hess=d2f_fcn, \
                    constraints=[simple_lincons], bounds=Bounds(xmin, xmax))
 
-    print(res)
+    ####################################################################
+    # Test Environment
+    ####################################################################
+    print(acpf_consfcn(x0, c)
+
     
+
+# region [ Cost-Related Functions ]
 
 def costfcn(x, c):
     ng = c.gen.shape[0]
@@ -144,6 +148,99 @@ def polycost_hess(cost_metrics, pg):
 
     return cost
 
+# endregion
+
+
+# region [ Constraint Functions ]
+
+def acpf_consfcn(x, c):
+    const = Const()
+
+    nb = c.bus.shape[0]
+    ng = c.gen.shape[0]
+    nbr = c.branch.shape[0]
+
+    ii = get_var_idx(c)
+
+    va = x[ii['i1']['va']:ii['iN']['va']]
+    vm = x[ii['i1']['vm']:ii['iN']['vm']]
+    pg = x[ii['i1']['pg']:ii['iN']['pg']]
+    qg = x[ii['i1']['qg']:ii['iN']['qg']]
+
+    vcplx = vm * np.exp(1j * va)
+    c.gen[:, const.PG] = c.mva_base * pg
+    c.gen[:, const.QG] = c.mva_base * qg
+
+    Ybus = makeYbus(c)
+    Sbus = makeSbus(c.mva_base, c.bus, c.gen)
+    mis = - Sbus + \
+          vcplx * np.asarray(np.conj(Ybus * np.matrix(vcplx).T)).flatten() 
+
+    return np.concatenate((np.real(mis), np.imag(mis)))
+
+
+# endregion
+
+# region [ Powerflow-related Functions ]
+
+def makeSbus(mva_base, bus, gen):
+    const = Const()
+
+    nb = bus.shape[0]
+    ng = gen.shape[0]
+
+    g_idx = np.array(range(ng), dtype=int)
+    g_busnum = np.array(gen[:, const.GEN_BUS] - 1, dtype=int)
+
+    Sbusg = np.ones(nb) * (0 + 0j)
+    Sbusg[g_busnum] = (gen[:, const.PG] + 1j * gen[:, const.QG]) / mva_base
+    Sbusd = (bus[:, const.PD] + 1j * bus[:, const.QD]) / mva_base
+    
+    return Sbusg - Sbusd
+
+def makeYbus(c):
+    const = Const()
+
+    nb = c.bus.shape[0]
+    ng = c.gen.shape[0]
+    nbr = c.branch.shape[0]
+
+    Ys = 1 / (c.branch[:, const.BR_R] + 1j * c.branch[:, const.BR_X])
+    Bc = c.branch[:, const.BR_B]
+    tap = np.ones(nbr)
+    tap_idx = (c.branch.take(const.TAP, axis=1) != 0).nonzero()
+    tap[tap_idx] = c.branch[tap_idx, const.TAP]
+
+    Ytt = Ys + 1j * Bc/2
+    Yff = Ytt / (tap * np.conj(tap))
+    Yft = - Ys / np.conj(tap)
+    Ytf = - Ys / tap
+
+    ysh = (c.bus[:, const.GS] + 1j * c.bus[:, const.BS]) / c.mva_base
+
+    b_idx = np.array(range(nb), dtype=int)
+    br_idx = np.array(range(nbr), dtype=int)
+    fbus_idx = np.array(c.branch[:, const.F_BUS] - 1, dtype=int)
+    tbus_idx = np.array(c.branch[:, const.T_BUS] - 1, dtype=int)
+
+    Cf = bsr_matrix((np.ones(nbr), (br_idx, fbus_idx)), shape=(nbr,nb))
+    Ct = bsr_matrix((np.ones(nbr), (br_idx, tbus_idx)), shape=(nbr,nb))
+
+
+    Yf = bsr_matrix((np.concatenate((Yff, Yft)), \
+                     (np.concatenate((br_idx, br_idx)), np.concatenate((fbus_idx, tbus_idx)))), \
+                    shape=(nbr,nb))
+    Yt = bsr_matrix((np.concatenate((Ytf, Ytt)), \
+                     (np.concatenate((br_idx, br_idx)), np.concatenate((fbus_idx, tbus_idx)))), \
+                    shape=(nbr,nb))
+    Ysh = bsr_matrix((ysh, (b_idx, b_idx)), shape=(nb,nb))
+
+    Ybus = Cf.T *Yf + Ct.T * Yt + Ysh
+    
+    return Ybus
+
+# endregion
+
 def get_var_idx(c):
     nb = c.bus.shape[0]
     ng = c.gen.shape[0]
@@ -151,3 +248,9 @@ def get_var_idx(c):
           'i1': {'va': 0, 'vm': nb, 'pg': 2*nb, 'qg': 2*nb+ng}, \
           'iN': {'va': nb, 'vm': 2*nb, 'pg': 2*nb+ng, 'qg': 2*(nb+ng)}}
     return ii
+
+def deg2rad(d):
+    return d / 180 * np.pi
+
+def rad2deg(r):
+    return r / np.pi * 180
