@@ -61,17 +61,37 @@ def runcopf(c):
     ####################################################################
     # Nonlinear Power Flow Constraints (g: eqcons, h: ineqcons)
     ####################################################################   
-    g_fcn = lambda x: acpf_consfcn(x, c)
-    # eqcons = NonlinearConstraint(g_fcn, -np.inf, 1, jac=dg_fcn, hess=d2g_fcn)
-    # ineqcons = NonlinearConstraint(h_fcn, -np.inf, 1, jac=dh_fcn, hess=d2h_fcn)
-    res = minimize(f_fcn, x0, jac=df_fcn, hess=d2f_fcn, \
-                   constraints=[simple_lincons], bounds=Bounds(xmin, xmax))
+    g_fcn   = lambda x: acpf_consfcn(x, c)
+    # dg_fcn  = lambda x: acpf_consfcn_jac(x, c)
+    # d2g_fcn = lambda x: acpf_consfcn_hess(x, c)
+
+    h_fcn   = lambda x: linerating_consfcn(x, c)
+    # dh_fcn  = lambda x: linerating_consfcn_jac(x, c)
+    # d2h_fcn = lambda x: linerating_consfcn_hess(x, c)
+
+    eqcons = NonlinearConstraint(g_fcn, 0, 0)
+    ineqcons = NonlinearConstraint(h_fcn, -np.inf, 0)
 
     ####################################################################
     # Test Environment
-    ####################################################################
-    print(acpf_consfcn(x0, c)
+    ####################################################################    
+    res = minimize(f_fcn, x0, jac=df_fcn, hess=d2f_fcn, method='trust-constr', \
+                   constraints=[eqcons], bounds=Bounds(xmin, xmax))
 
+    if res.success:
+        ii = get_var_idx(c)
+        pg_sched = res.x[ii['i1']['pg']:ii['iN']['pg']] * c.mva_base
+        qg_sched = res.x[ii['i1']['qg']:ii['iN']['qg']] * c.mva_base
+
+        mw_fmtr   = {'float_kind':lambda x: "%7.3f MW  " % x}
+        mvar_fmtr = {'float_kind':lambda x: "%7.3f MVar" % x}
+        print('')
+        print('  Status | Optimization numerically successed: %s' % res.message)
+        print('    Iter | %d' % res.nit)
+        print('      PG | %s' % np.array2string(pg_sched, formatter=mw_fmtr))
+        print('      QG | %s' % np.array2string(qg_sched, formatter=mvar_fmtr))
+    else:
+        print('  Status | Optimization numerically failed: %s' % res.message)
     
 
 # region [ Cost-Related Functions ]
@@ -161,7 +181,6 @@ def acpf_consfcn(x, c):
     nbr = c.branch.shape[0]
 
     ii = get_var_idx(c)
-
     va = x[ii['i1']['va']:ii['iN']['va']]
     vm = x[ii['i1']['vm']:ii['iN']['vm']]
     pg = x[ii['i1']['pg']:ii['iN']['pg']]
@@ -171,15 +190,81 @@ def acpf_consfcn(x, c):
     c.gen[:, const.PG] = c.mva_base * pg
     c.gen[:, const.QG] = c.mva_base * qg
 
-    Ybus = makeYbus(c)
+    Ybus, _, _ = makeYbus(c)
     Sbus = makeSbus(c.mva_base, c.bus, c.gen)
     mis = - Sbus + \
           vcplx * np.asarray(np.conj(Ybus * np.matrix(vcplx).T)).flatten() 
 
     return np.concatenate((np.real(mis), np.imag(mis)))
 
+# def acpf_consfcn_jac(x, c):
+#     const = Const()
+
+#     nb = c.bus.shape[0]
+#     ng = c.gen.shape[0]
+#     nbr = c.branch.shape[0]
+#     nx = 2 * (nb + ng)
+
+#     ii = get_var_idx(c)
+#     va = x[ii['i1']['va']:ii['iN']['va']]
+#     vm = x[ii['i1']['vm']:ii['iN']['vm']]
+#     pg = x[ii['i1']['pg']:ii['iN']['pg']]
+#     qg = x[ii['i1']['qg']:ii['iN']['qg']]
+
+#     vcplx = vm * np.exp(1j * va)
+#     c.gen[:, const.PG] = c.mva_base * pg
+#     c.gen[:, const.QG] = c.mva_base * qg
+
+#     Ybus = makeYbus(c)
+#     Sbus = makeSbus(c.mva_base, c.bus, c.gen)
+
+#     dSdVa = dSbus_dVa(Ybus, vcplx)
+#     dSdVm = dSbus_dVm(Ybus, vcplx)
+
+#     # dg = bsr_matrix(, shape=(2*nb, nx))
+
+#     return 0
+
+# def dSbus_dVa(Ybus, V):
+
+#     return 0
+
+# def dSbus_dVm(Ybus, V):
+
+#     return 0
+
+
+def linerating_consfcn(x, c):
+    const = Const()
+
+    nb = c.bus.shape[0]
+    ng = c.gen.shape[0]
+    nbr = c.branch.shape[0]
+
+    ii = get_var_idx(c)
+    va = x[ii['i1']['va']:ii['iN']['va']]
+    vm = x[ii['i1']['vm']:ii['iN']['vm']]
+
+    vcplx = vm * np.exp(1j * va)
+
+    _, Yf, Yt = makeYbus(c)
+
+    fbus_idx = np.array(c.branch[:, const.F_BUS] - 1, dtype=int)
+    tbus_idx = np.array(c.branch[:, const.T_BUS] - 1, dtype=int)
+
+    flow_max = (c.branchrate / c.mva_base ) ** 2
+    Sf = vcplx[fbus_idx] * np.conj(Yf * vcplx)
+    St = vcplx[tbus_idx] * np.conj(Yf * vcplx)
+    
+    Sfreal_sq = np.real(Sf) ** 2
+    Sfimag_sq = np.imag(Sf) ** 2
+    Streal_sq = np.real(St) ** 2
+    Stimag_sq = np.imag(St) ** 2
+
+    return np.concatenate((Sfreal_sq + Sfimag_sq - flow_max, Streal_sq + Stimag_sq - flow_max))
 
 # endregion
+
 
 # region [ Powerflow-related Functions ]
 
@@ -235,9 +320,9 @@ def makeYbus(c):
                     shape=(nbr,nb))
     Ysh = bsr_matrix((ysh, (b_idx, b_idx)), shape=(nb,nb))
 
-    Ybus = Cf.T *Yf + Ct.T * Yt + Ysh
+    Ybus = Cf.T * Yf + Ct.T * Yt + Ysh
     
-    return Ybus
+    return Ybus, Yf, Yt
 
 # endregion
 
