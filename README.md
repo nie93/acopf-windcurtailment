@@ -1,6 +1,6 @@
 # Wind Curtailment Remedial Action Scheme (ACOPF)
 
-## Requirements
+## Development Environment
 
 * numpy (==1.16.1+mkl)
-* scipy (==1.2.0)
+* scipy (==0.19.0)
