@@ -54,9 +54,10 @@ def runcopf(c):
     simple_powerbalance = np.zeros(x0.shape[0])
     tload = sum(c.bus[:,const.PD]) / c.mva_base
     simple_powerbalance[ii['i1']['pg']:ii['iN']['pg']] = 1
-    simple_lincons = LinearConstraint(simple_powerbalance, tload, tload)
-    # simple_lincons = {'type': 'eq',
-    #                   'fun': lambda x : sum(x[ii['i1']['pg']:ii['iN']['pg']]) - tload}
+    set_trace()
+    # simple_lincons = LinearConstraint(simple_powerbalance, tload, tload)  ## for scipy 1.2.x
+    simple_lincons = {'type': 'eq',
+        'fun' : lambda x: sum(x[ii['i1']['pg']:ii['iN']['pg']]) - tload}
     
     ####################################################################
     # Nonlinear Power Flow Constraints (g: eqcons, h: ineqcons)
@@ -69,14 +70,22 @@ def runcopf(c):
     # dh_fcn  = lambda x: linerating_consfcn_jac(x, c)
     # d2h_fcn = lambda x: linerating_consfcn_hess(x, c)
 
-    eqcons = NonlinearConstraint(g_fcn, 0, 0)
-    ineqcons = NonlinearConstraint(h_fcn, -np.inf, 0)
+    # eqcons = NonlinearConstraint(g_fcn, 0, 0)          ## for scipy 1.2.x
+    # ineqcons = NonlinearConstraint(h_fcn, -np.inf, 0)  ## for scipy 1.2.x
+
+    eqcons = {'type': 'eq',
+              'fun' : lambda x: acpf_consfcn(x, c)}
+
+    minboundcons = {'type': 'ineq',
+                    'fun' : lambda x: x - xmin}
+    maxboundcons = {'type': 'ineq',
+                    'fun' : lambda x: xmax - x}
 
     ####################################################################
     # Test Environment
     ####################################################################    
-    res = minimize(f_fcn, x0, jac=df_fcn, hess=d2f_fcn, method='trust-constr', \
-                   constraints=[eqcons], bounds=Bounds(xmin, xmax))
+    res = minimize(f_fcn, x0, jac=df_fcn, hess=d2f_fcn, \
+                   constraints=(simple_lincons))
 
     if res.success:
         ii = get_var_idx(c)
