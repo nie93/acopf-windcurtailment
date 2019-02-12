@@ -38,8 +38,8 @@ def runcopf(c):
                            c.gen.take(const.PMAX, axis=1) / c.mva_base, \
                            c.gen.take(const.QMAX, axis=1) / c.mva_base), axis=0)
 
-    # xmin[(c.bus.take(const.BUS_TYPE, axis=1) == 3).nonzero()] = 0
-    # xmax[(c.bus.take(const.BUS_TYPE, axis=1) == 3).nonzero()] = 0
+    xmin[(c.bus.take(const.BUS_TYPE, axis=1) == 3).nonzero()] = 0
+    xmax[(c.bus.take(const.BUS_TYPE, axis=1) == 3).nonzero()] = 0
 
     ####################################################################
     # Polynomial Cost Functions (f)
@@ -51,37 +51,30 @@ def runcopf(c):
     ####################################################################
     # Simple Power Balance Constraint (Linear, lossless)
     ####################################################################   
-    simple_powerbalance = np.zeros(x0.shape[0])
+    simple_powerbalance = np.zeros_like(x0)
     tload = sum(c.bus[:,const.PD]) / c.mva_base
     simple_powerbalance[ii['i1']['pg']:ii['iN']['pg']] = 1
     simple_lincons = {'type': 'eq',
-        'fun' : lambda x: sum(x[ii['i1']['pg']:ii['iN']['pg']]) - tload}
+        'fun' : lambda x: sum(x[ii['i1']['pg']:ii['iN']['pg']]) - tload,
+        'jac' : lambda x: simple_powerbalance}
     
     ####################################################################
     # Nonlinear Power Flow Constraints (g: eqcons, h: ineqcons)
     ####################################################################   
-    g_fcn   = lambda x: acpf_consfcn(x, c)
-    # dg_fcn  = lambda x: acpf_consfcn_jac(x, c)
-    # d2g_fcn = lambda x: acpf_consfcn_hess(x, c)
+    eqcons   = {'type': 'eq',
+                'fun' : lambda x: acpf_consfcn(x, c)}
+                
+    ineqcons = {'type': 'ineq',
+                'fun' : lambda x: linerating_consfcn(x, c)}
 
-    h_fcn   = lambda x: linerating_consfcn(x, c)
-    # dh_fcn  = lambda x: linerating_consfcn_jac(x, c)
-    # d2h_fcn = lambda x: linerating_consfcn_hess(x, c)
-
-    eqcons = {'type': 'eq',
-              'fun' : lambda x: acpf_consfcn(x, c)}
-
-
+    set_trace()
     ####################################################################
     # Test Environment
     #################################################################### 
-    all_cons = ()
-    all_cons += (simple_lincons, )
-
+    all_cons = (eqcons, ineqcons)
     bnds = build_bound_cons(xmin, xmax)
     res = minimize(f_fcn, x0, jac=df_fcn, hess=d2f_fcn, bounds=bnds, \
                    constraints=all_cons, options={'disp': True})
-    # set_trace()
 
     if res.success:
         ii = get_var_idx(c)
@@ -98,6 +91,8 @@ def runcopf(c):
         # print('       x | %s' % np.array2string(res.x))
     else:
         print('  Status | Optimization numerically failed: %s' % res.message)
+    
+    set_trace()
     
 
 # region [ Cost-Related Functions ]
@@ -233,7 +228,7 @@ def acpf_consfcn(x, c):
 #     dSdVa = dSbus_dVa(Ybus, vcplx)
 #     dSdVm = dSbus_dVm(Ybus, vcplx)
 
-#     # dg = bsr_matrix(, shape=(2*nb, nx))
+#     # dg = csr_matrix(, shape=(2*nb, nx))
 
 #     return 0
 
@@ -320,17 +315,17 @@ def makeYbus(c):
     fbus_idx = np.array(c.branch[:, const.F_BUS] - 1, dtype=int)
     tbus_idx = np.array(c.branch[:, const.T_BUS] - 1, dtype=int)
 
-    Cf = bsr_matrix((np.ones(nbr), (br_idx, fbus_idx)), shape=(nbr,nb))
-    Ct = bsr_matrix((np.ones(nbr), (br_idx, tbus_idx)), shape=(nbr,nb))
+    Cf = csr_matrix((np.ones(nbr), (br_idx, fbus_idx)), shape=(nbr,nb))
+    Ct = csr_matrix((np.ones(nbr), (br_idx, tbus_idx)), shape=(nbr,nb))
 
 
-    Yf = bsr_matrix((np.concatenate((Yff, Yft)), \
+    Yf = csr_matrix((np.concatenate((Yff, Yft)), \
                      (np.concatenate((br_idx, br_idx)), np.concatenate((fbus_idx, tbus_idx)))), \
                     shape=(nbr,nb))
-    Yt = bsr_matrix((np.concatenate((Ytf, Ytt)), \
+    Yt = csr_matrix((np.concatenate((Ytf, Ytt)), \
                      (np.concatenate((br_idx, br_idx)), np.concatenate((fbus_idx, tbus_idx)))), \
                     shape=(nbr,nb))
-    Ysh = bsr_matrix((ysh, (b_idx, b_idx)), shape=(nb,nb))
+    Ysh = csr_matrix((ysh, (b_idx, b_idx)), shape=(nb,nb))
 
     Ybus = Cf.T * Yf + Ct.T * Yt + Ysh
     
