@@ -1,3 +1,4 @@
+from arithmetic import *
 from case import Case, Const
 import numpy as np
 from scipy.sparse import *
@@ -17,22 +18,12 @@ def runcopf(c):
     niqnln = nbr
 
     ii = get_var_idx(c)
-
-    x0 = np.concatenate((deg2rad(c.bus.take(const.VA, axis=1)), \
-                         c.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
-                         c.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / c.mva_base, \
-                         c.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / c.mva_base), axis=0)
-
-    x0 = np.concatenate((np.zeros(nb), \
-                         c.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
-                         c.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / c.mva_base, \
-                         c.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / c.mva_base), axis=0)
-
+    
+    x0   = c.x0
     xmin = np.concatenate((-np.inf * np.ones(nb), \
                            c.bus.take(const.VMIN, axis=1), \
                            c.gen.take(const.PMIN, axis=1) / c.mva_base, \
                            c.gen.take(const.QMIN, axis=1) / c.mva_base), axis=0)
-
     xmax = np.concatenate((np.inf * np.ones(nb), \
                            c.bus.take(const.VMAX, axis=1), \
                            c.gen.take(const.PMAX, axis=1) / c.mva_base, \
@@ -63,9 +54,6 @@ def runcopf(c):
     ####################################################################   
     eqcons   = {'type': 'eq',
                 'fun' : lambda x: acpf_consfcn(x, c)}
-
-    ll = linerating_consfcn(x0, c)
-    set_trace()
                 
     ineqcons = {'type': 'ineq',
                 'fun' : lambda x: linerating_consfcn(x, c)}
@@ -76,6 +64,8 @@ def runcopf(c):
     bnds = build_bound_cons(xmin, xmax)
     res = minimize(f_fcn, x0, jac=df_fcn, hess=d2f_fcn, bounds=bnds, \
                    constraints=all_cons, options={'disp': True})
+
+    ll = linerating_consfcn(res.x, c)
 
     if res.success:
         ii = get_var_idx(c)
@@ -342,9 +332,3 @@ def get_var_idx(c):
           'i1': {'va': 0, 'vm': nb, 'pg': 2*nb, 'qg': 2*nb+ng}, \
           'iN': {'va': nb, 'vm': 2*nb, 'pg': 2*nb+ng, 'qg': 2*(nb+ng)}}
     return ii
-
-def deg2rad(d):
-    return d / 180 * np.pi
-
-def rad2deg(r):
-    return r / np.pi * 180

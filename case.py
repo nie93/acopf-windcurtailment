@@ -1,5 +1,9 @@
+from arithmetic import *
 import csv
 import numpy as np
+import os
+from pdb import *
+
 
 class Const(object):
     def __init__(self):
@@ -78,25 +82,29 @@ class Case(object):
         self.mva_base = 100
 
     def import_case(self, path):
-        self.path = path
-        self.bus = np.genfromtxt(path+"bus.csv", delimiter=',')
-        self.gen = np.genfromtxt(path+"gen.csv", delimiter=',')
-        self.branch = np.genfromtxt(path+"branch.csv", delimiter=',')
-        self.gencost = np.genfromtxt(path+"gencost.csv", delimiter=',')
+        const = Const()
+
+        self.path       = path
+        self.bus        = np.genfromtxt(path+"bus.csv", delimiter=',')
+        self.gen        = np.genfromtxt(path+"gen.csv", delimiter=',')
+        self.branch     = np.genfromtxt(path+"branch.csv", delimiter=',')
+        self.gencost    = np.genfromtxt(path+"gencost.csv", delimiter=',')
         self.branchrate = np.genfromtxt(path+"branchrate.csv", delimiter=',')
 
-        # with open(path+"bus.csv", "r") as f:
-        #     rdr = csv.reader(f)
-        #     self.bus = list(list(r) for r in csv.reader(f,delimiter=','))
-        # with open(path+"gen.csv", "r") as f:
-        #     rdr = csv.reader(f)
-        #     self.gen = list(list(r) for r in csv.reader(f,delimiter=','))
-        # with open(path+"branch.csv", "r") as f:
-        #     rdr = csv.reader(f)
-        #     self.branch = list(list(r) for r in csv.reader(f,delimiter=','))
-        # with open(path+"gencost.csv", "r") as f:
-        #     rdr = csv.reader(f)
-        #     self.gencost = list(list(r) for r in csv.reader(f,delimiter=','))
+        if (os.path.exists(path+"x0.csv")):
+            self.x0 = np.genfromtxt(path+"x0.csv", delimiter=',')
+        else:
+            self.x0 = np.concatenate((deg2rad(self.bus.take(const.VA, axis=1)), \
+                self.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
+                self.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / self.mva_base, \
+                self.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / self.mva_base), axis=0)
 
-    
+    def set_gen_prop(self, type, idx, value):
+        const = Const()
+        if type == 'PMAX':
+            self.gen[idx, const.PMAX] = value
+
+    def set_branch_prop(self, type, idx, value):
+        if type == 'RATE':
+            self.branchrate[idx] = value
 
