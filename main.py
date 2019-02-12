@@ -9,8 +9,7 @@ def main():
     c = Case()
     c.import_case(casepath)
     # c.set_gen_prop('PMAX', [1,2,3], [30, 80, 80])
-    c.set_branch_prop('RATE', [14], [39.999])
-    set_trace()
+    c.set_branch_prop('RATE', [14], [34.999])
     
     opf.runcopf(c)
 
