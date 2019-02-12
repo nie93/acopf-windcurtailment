@@ -63,11 +63,12 @@ def runcopf(c):
     ####################################################################   
     eqcons   = {'type': 'eq',
                 'fun' : lambda x: acpf_consfcn(x, c)}
+
+    ll = linerating_consfcn(x0, c)
+    set_trace()
                 
     ineqcons = {'type': 'ineq',
                 'fun' : lambda x: linerating_consfcn(x, c)}
-
-    set_trace()
     ####################################################################
     # Test Environment
     #################################################################### 
@@ -268,7 +269,8 @@ def linerating_consfcn(x, c):
     Streal_sq = np.real(St) ** 2
     Stimag_sq = np.imag(St) ** 2
 
-    return np.concatenate((Sfreal_sq + Sfimag_sq - flow_max, Streal_sq + Stimag_sq - flow_max))
+    return np.concatenate((flow_max - Sfreal_sq - Sfimag_sq, \
+                           flow_max - Streal_sq - Stimag_sq))
 
 # endregion
 
