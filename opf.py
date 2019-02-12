@@ -93,6 +93,8 @@ def runcopf(c):
     else:
         print('  Status | Optimization numerically failed: %s' % res.message)
     
+    set_trace()
+    
 
 # region [ Cost-Related Functions ]
 
