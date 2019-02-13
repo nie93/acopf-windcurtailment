@@ -99,12 +99,14 @@ class Case(object):
                 self.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / self.mva_base, \
                 self.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / self.mva_base), axis=0)
 
-    def set_gen_prop(self, type, idx, value):
-        const = Const()
-        if type == 'PMAX':
-            self.gen[idx, const.PMAX] = value
+    def set_gen_prop(self, col, idx, value):
+        self.gen[idx, col] = value
 
     def set_branch_prop(self, type, idx, value):
         if type == 'RATE':
             self.branchrate[idx] = value
+            
+    def scale_branch_prop(self, col, multi):
+        self.branch[:, col] = multi * self.branch[:, col]
+
 

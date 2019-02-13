@@ -54,34 +54,37 @@ def runcopf(c):
     ####################################################################   
     eqcons   = {'type': 'eq',
                 'fun' : lambda x: acpf_consfcn(x, c)}
-                
     ineqcons = {'type': 'ineq',
                 'fun' : lambda x: linerating_consfcn(x, c)}
+
     ####################################################################
     # Test Environment
     #################################################################### 
     all_cons = (eqcons, ineqcons)
     bnds = build_bound_cons(xmin, xmax)
     res = minimize(f_fcn, x0, jac=df_fcn, hess=d2f_fcn, bounds=bnds, \
-                   constraints=all_cons, options={'disp': True})
+        constraints=eqcons, options={'disp': False})
 
     ll = linerating_consfcn(res.x, c)
 
-    if res.success:
-        ii = get_var_idx(c)
-        pg_sched = res.x[ii['i1']['pg']:ii['iN']['pg']] * c.mva_base
-        qg_sched = res.x[ii['i1']['qg']:ii['iN']['qg']] * c.mva_base
+    ii = get_var_idx(c)
+    res_va = rad2deg(res.x[ii['i1']['va']:ii['iN']['va']])
+    res_vm = res.x[ii['i1']['vm']:ii['iN']['vm']]
+    res_pg = res.x[ii['i1']['pg']:ii['iN']['pg']] * c.mva_base
+    res_qg = res.x[ii['i1']['qg']:ii['iN']['qg']] * c.mva_base
 
-        mw_fmtr   = {'float_kind': lambda x: "%7.3f MW  " % x}
-        mvar_fmtr = {'float_kind': lambda x: "%7.3f MVar" % x}
-        print('')
-        print('  Status | Optimization numerically successed: %s' % res.message)
-        print('    Iter | %d' % res.nit)
-        print('      PG | %s' % np.array2string(pg_sched, formatter=mw_fmtr))
-        print('      QG | %s' % np.array2string(qg_sched, formatter=mvar_fmtr))
-        # print('       x | %s' % np.array2string(res.x))
-    else:
-        print('  Status | Optimization numerically failed: %s' % res.message)
+    float_fmtr = {'float_kind': lambda x: "%7.3f" % x}
+
+    print('___________')  
+    print('     Statue | Exit mode %d' % res.status)
+    print('    Message | %s' % res.message)
+    print('       Iter | %d' % res.nit)
+    print('  Objective | %10.3f $/hr' % res.fun)
+    print('   VA (deg) | %s' % np.array2string(res_va[0:7], formatter=float_fmtr))
+    print('    VM (pu) | %s' % np.array2string(res_vm[0:7], formatter=float_fmtr))
+    print('    PG (MW) | %s' % np.array2string(res_pg, formatter=float_fmtr))
+    print('  QG (MVAR) | %s' % np.array2string(res_qg, formatter=float_fmtr))
+    print('___________ | ')  
     
     set_trace()
     
