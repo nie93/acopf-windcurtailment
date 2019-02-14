@@ -7,6 +7,43 @@
 * numpy (==1.16.1+mkl)
 * scipy (==0.19.0)
 
-##
 
-$$f\left(\mathbf{x}\right)\approx f\left(\mathbf{x}_{0}\right)+\nabla f\left(\mathbf{x}_{0}\right)\cdot\left(\mathbf{x}-\mathbf{x}_{0}\right)+\frac{1}{2}\left(\mathbf{x}-\mathbf{x}_{0}\right)^{T}\mathbf{H}\left(\mathbf{x}_{0}\right)\left(\mathbf{x}-\mathbf{x}_{0}\right)$$
+## BeagleBone Black (armv7h) Development
+
+### Using `ipopt` and Python interface `cyipopt`
+
+[Install Scripts Reference](https://github.com/matthias-k/cyipopt)
+
+#### Package Requirements
+
+```
+$ sudo apt install cython
+$ sudo apt-get -y install liblapack-dev libblas-dev
+$ sudo apt-get -y install gfortran
+$ sudo apt install coinor-libipopt1v5 coinor-libipopt-dev
+$ sudo apt install python-numpy python-six python-future
+```
+
+#### Build and Install `cyipopt`
+
+```
+$ git clone https://github.com/matthias-k/cyipopt.git
+$ cd cyipopt
+$ python setup.py build
+```
+
+Check that everything linked correctly with `ldd` (depends on the CPU architecture):
+
+```
+$ ldd build/lib.linux-x86_64-2.7/cyipopt.so
+```
+
+```
+$ ldd build/lib.linux-armv7l-2.7/cyipopt.so
+```
+
+Then, install
+
+```
+$ sudo python setup.py install
+```

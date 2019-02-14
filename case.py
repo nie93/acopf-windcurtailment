@@ -91,14 +91,6 @@ class Case(object):
         self.gencost    = np.genfromtxt(path+"gencost.csv", delimiter=',')
         self.branchrate = np.genfromtxt(path+"branchrate.csv", delimiter=',')
 
-        if (os.path.exists(path+"x0.csv")):
-            self.x0 = np.genfromtxt(path+"x0.csv", delimiter=',')
-        else:
-            self.x0 = np.concatenate((deg2rad(self.bus.take(const.VA, axis=1)), \
-                self.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
-                self.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / self.mva_base, \
-                self.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / self.mva_base), axis=0)
-
     def set_gen_prop(self, col, idx, value):
         self.gen[idx, col] = value
 

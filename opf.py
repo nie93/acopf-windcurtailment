@@ -6,7 +6,7 @@ from scipy.optimize import *
 from pdb import *
 
 
-def runcopf(c):
+def runcopf(c, flat_start):
     const = Const()
     
     nb     = c.bus.shape[0]
@@ -18,8 +18,15 @@ def runcopf(c):
     niqnln = nbr
 
     ii = get_var_idx(c)
-    
-    x0   = c.x0
+
+    if flat_start:
+        x0 = np.concatenate((deg2rad(c.bus.take(const.VA, axis=1)), \
+            c.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
+            c.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / c.mva_base, \
+            c.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / c.mva_base), axis=0)
+    else:
+        x0   = np.genfromtxt(c.path+"x0.csv", delimiter=',')
+        
     xmin = np.concatenate((-np.inf * np.ones(nb), \
                            c.bus.take(const.VMIN, axis=1), \
                            c.gen.take(const.PMIN, axis=1) / c.mva_base, \
@@ -63,7 +70,7 @@ def runcopf(c):
     all_cons = (eqcons, ineqcons)
     bnds = build_bound_cons(xmin, xmax)
     res = minimize(f_fcn, x0, jac=df_fcn, hess=d2f_fcn, bounds=bnds, \
-        constraints=eqcons, options={'disp': False})
+        constraints=all_cons, options={'disp': False})
 
     ll = linerating_consfcn(res.x, c)
 
@@ -80,9 +87,9 @@ def runcopf(c):
     print('    Message | %s' % res.message)
     print('       Iter | %d' % res.nit)
     print('  Objective | %10.3f $/hr' % res.fun)
-    print('   VA (deg) | %s' % np.array2string(res_va[0:7], formatter=float_fmtr))
-    print('    VM (pu) | %s' % np.array2string(res_vm[0:7], formatter=float_fmtr))
-    print('    PG (MW) | %s' % np.array2string(res_pg, formatter=float_fmtr))
+    print('  VA (deg)  | %s' % np.array2string(res_va[0:7], formatter=float_fmtr))
+    print('  VM (pu)   | %s' % np.array2string(res_vm[0:7], formatter=float_fmtr))
+    print('  PG (MW)   | %s' % np.array2string(res_pg, formatter=float_fmtr))
     print('  QG (MVAR) | %s' % np.array2string(res_qg, formatter=float_fmtr))
     print('___________ | ')  
     
