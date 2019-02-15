@@ -17,18 +17,13 @@ class opf_mdl(object):
     def gradient(self, x):
         return costfcn_jac(x, self.case)
 
-    def constraints(self, x):       
-        const = Const() 
-        ii = get_var_idx(self.case)
-        tload = sum(self.case.bus[:,const.PD]) / self.case.mva_base
-        return sum(x[ii['i1']['pg']:ii['iN']['pg']]) - tload
+    def constraints(self, x):
+        return simple_powerbalance_consfcn(x, self.case)
+        # return acpf_consfcn(x, self.case)
 
-    def jacobian(self, x):        
-        const = Const() 
-        ii = get_var_idx(self.case)
-        simple_powerbalance = np.zeros_like(x)
-        simple_powerbalance[ii['i1']['pg']:ii['iN']['pg']] = 1
-        return simple_powerbalance
+    def jacobian(self, x):
+        return simple_powerbalance_consfcn_jac(x, self.case)
+        # return acpf_consfcn_jac(x, self.case)
 
     def intermediate(
         self,
@@ -292,6 +287,19 @@ def linerating_consfcn(x, c):
 
     return np.concatenate((flow_max - Sfreal_sq - Sfimag_sq, \
                            flow_max - Streal_sq - Stimag_sq))
+
+def simple_powerbalance_consfcn(x, c):
+    const = Const() 
+    ii = get_var_idx(c)
+    tload = sum(c.bus[:,const.PD]) / c.mva_base
+    return sum(x[ii['i1']['pg']:ii['iN']['pg']]) - tload
+
+def simple_powerbalance_consfcn_jac(x, c):
+    const = Const() 
+    ii = get_var_idx(c)
+    jac = np.zeros_like(x)
+    jac[ii['i1']['pg']:ii['iN']['pg']] = 1
+    return jac
 
 # endregion
 
