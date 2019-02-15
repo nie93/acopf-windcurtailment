@@ -4,13 +4,14 @@
 
 ## Development Environment
 
+* Python 2.7, 3.5
 * numpy (==1.16.1+mkl)
 * scipy (==0.19.0)
 
 
 ## BeagleBone Black (armv7h) Development
 
-### Using `ipopt` and Python interface `cyipopt`
+### Using `Ipopt` and Python interface `cyipopt`
 
 [Install Scripts Reference](https://github.com/matthias-k/cyipopt)
 
@@ -47,3 +48,8 @@ Then, install
 ```sh
 $ sudo python setup.py install
 ```
+
+## Reference
+
+* [Ray D. Zimmerman, AC Power Flows, Generalized OPF Costs and their
+Derivatives using Complex Matrix Notation](https://www.pserc.cornell.edu/matpower/TN2-OPF-Derivatives.pdf)

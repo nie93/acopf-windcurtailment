@@ -2,8 +2,7 @@
 
 ## MUST-DOs`
 
-- [ ] `SLSQP` algorithm stops with local optimal found
-- [ ] Try `pyomo==4.3.11388` for better computational performance (available in debian packages)
+- [ ] Inefficient use in splitting real part and imaginary part in `opf.acpf_consfcn_jac()`
 - [ ] (Optional) Use an older version of `numpy` (Latest version for ARM debian is `1.13.3`)
 - [x] Use an older version of `scipy` (Latest version for ARM debian is `0.19.1`)
 

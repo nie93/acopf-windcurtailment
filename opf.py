@@ -43,7 +43,7 @@ class opf_mdl(object):
         #
         # Example for the use of the intermediate callback.
         #
-        print "Objective value at iteration #%d is - %g" % (iter_count, obj_value)
+        print('Objective value at iteration #%d is - %g' % (iter_count, obj_value))
 
 
 def runcopf(c, flat_start):
@@ -60,7 +60,11 @@ def runcopf(c, flat_start):
     ii = get_var_idx(c)
 
     if flat_start:
-        x0 = np.concatenate((deg2rad(c.bus.take(const.VA, axis=1)), \
+        # x0 = np.concatenate((deg2rad(c.bus.take(const.VA, axis=1)), \
+        #     c.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
+        #     c.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / c.mva_base, \
+        #     c.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / c.mva_base), axis=0)
+        x0 = np.concatenate((np.zeros(nb), \
             c.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
             c.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / c.mva_base, \
             c.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / c.mva_base), axis=0)
@@ -82,8 +86,13 @@ def runcopf(c, flat_start):
     ####################################################################
     # Test Environment
     #################################################################### 
-    cl = [0.]
-    cu = [0.]
+    # cl = np.zeros(2 * nb)
+    # cu = np.zeros(2 * nb)
+    cl = [0., 0.]
+    cu = [0., 0.]
+
+    dg = acpf_consfcn_jac(x0, c)
+    set_trace()
 
     nlp = ipopt.problem(n=len(x0), m=len(cl), lb=xmin, ub=xmax, cl=cl, cu=cu, \
         problem_obj=opf_mdl(c))
@@ -101,7 +110,7 @@ def runcopf(c, flat_start):
     print('___________')  
     print('     Status | Exit mode %d' % res_info['status'])
     print('    Message | %s' % res_info['status_msg'])
-    # print('       Iter | %d' % res.nit)
+    # print('       Iter | %d' % res_info['iter_count'])
     print('  Objective | %10.3f $/hr' % res_info['obj_val'])
     print('  VA (deg)  | %s' % np.array2string(res_va[0:7], formatter=float_fmtr))
     print('  VM (pu)   | %s' % np.array2string(res_vm[0:7], formatter=float_fmtr))
@@ -221,41 +230,64 @@ def acpf_consfcn(x, c):
 
     return np.concatenate((np.real(mis), np.imag(mis)))
 
-# def acpf_consfcn_jac(x, c):
-#     const = Const()
+def acpf_consfcn_jac(x, c):
+    const = Const()
 
-#     nb = c.bus.shape[0]
-#     ng = c.gen.shape[0]
-#     nbr = c.branch.shape[0]
-#     nx = 2 * (nb + ng)
+    nb  = c.bus.shape[0]
+    ng  = c.gen.shape[0]
+    nbr = c.branch.shape[0]
+    nx  = 2 * (nb + ng)
 
-#     ii = get_var_idx(c)
-#     va = x[ii['i1']['va']:ii['iN']['va']]
-#     vm = x[ii['i1']['vm']:ii['iN']['vm']]
-#     pg = x[ii['i1']['pg']:ii['iN']['pg']]
-#     qg = x[ii['i1']['qg']:ii['iN']['qg']]
+    ii = get_var_idx(c)
 
-#     vcplx = vm * np.exp(1j * va)
-#     c.gen[:, const.PG] = c.mva_base * pg
-#     c.gen[:, const.QG] = c.mva_base * qg
+    g_idx    = np.array(range(0, ng), dtype=int)
+    gbus_idx = np.array(c.gen[:, const.GEN_BUS] - 1, dtype=int)
+    cons_idx = np.array(range(2 * nb), dtype=int)
+    va_idx   = np.array(range(ii['i1']['va'], ii['iN']['va']), dtype=int)
+    vm_idx   = np.array(range(ii['i1']['vm'], ii['iN']['vm']), dtype=int)
+    pg_idx   = np.array(range(ii['i1']['pg'], ii['iN']['pg']), dtype=int)
+    qg_idx   = np.array(range(ii['i1']['qg'], ii['iN']['qg']), dtype=int)
+    x_idx    = np.concatenate((va_idx, vm_idx, pg_idx, qg_idx))
 
-#     Ybus = makeYbus(c)
-#     Sbus = makeSbus(c.mva_base, c.bus, c.gen)
+    va = x[va_idx]
+    vm = x[vm_idx]
+    pg = x[pg_idx]
+    qg = x[qg_idx]
 
-#     dSdVa = dSbus_dVa(Ybus, vcplx)
-#     dSdVm = dSbus_dVm(Ybus, vcplx)
+    vcplx = vm * np.exp(1j * va)
+    c.gen[:, const.PG] = c.mva_base * pg
+    c.gen[:, const.QG] = c.mva_base * qg
 
-#     # dg = csr_matrix(, shape=(2*nb, nx))
+    Ybus, _, _ = makeYbus(c)
+    Sbus = makeSbus(c.mva_base, c.bus, c.gen)
 
-#     return 0
+    dSdVa, dSdVm = dSbus_dV(Ybus, vcplx)
+    dSdV = hstack((dSdVa, dSdVm))
+    neg_Cg = csr_matrix((np.ones(ng), (gbus_idx, g_idx)), shape=(nb, ng))
+    zeros_b_g = csr_matrix(([],([],[])), shape=(nb, ng))
 
-# def dSbus_dVa(Ybus, V):
+    dpinj = hstack((csr_matrix(np.real(dSdV.toarray())), neg_Cg, zeros_b_g))
+    dqinj = hstack((csr_matrix(np.imag(dSdV.toarray())), zeros_b_g, neg_Cg))
 
-#     return 0
+    dg = lil_matrix((2*nb, nx), dtype=float)
+    dg[:, x_idx] = vstack((dpinj, dqinj))
+    
+    return dg.T
 
-# def dSbus_dVm(Ybus, V):
+def dSbus_dV(Ybus, V):
+    nb = V.shape[0]
+    I = Ybus.dot(V)
 
-#     return 0
+    b_idx = np.array(range(nb), dtype=int)
+
+    diagV = csr_matrix((V, (b_idx, b_idx)), shape=(nb, nb))
+    diagI = csr_matrix((I, (b_idx, b_idx)), shape=(nb, nb))
+    diagVnorm = csr_matrix((V/np.abs(V), (b_idx, b_idx)), shape=(nb, nb))
+
+    dSbus_dVa = ((1j) * diagV).dot(np.conj(diagI - Ybus.dot(diagV)))
+    dSbus_dVm = diagV.dot(np.conj(Ybus.dot(diagVnorm))) + np.conj(diagI).dot(diagVnorm)
+
+    return dSbus_dVa, dSbus_dVm 
 
 
 def linerating_consfcn(x, c):
