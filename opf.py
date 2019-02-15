@@ -93,26 +93,26 @@ def runcopf(c, flat_start):
     nlp = ipopt.problem(n=len(x0), m=len(cl), lb=xmin, ub=xmax, cl=cl, cu=cu, \
         problem_obj=opf_mdl(c))
 
-    res = nlp.solve(x0)
+    res_x, res_info = nlp.solve(x0)
 
-    # ii = get_var_idx(c)
-    # res_va = rad2deg(res.x[ii['i1']['va']:ii['iN']['va']])
-    # res_vm = res.x[ii['i1']['vm']:ii['iN']['vm']]
-    # res_pg = res.x[ii['i1']['pg']:ii['iN']['pg']] * c.mva_base
-    # res_qg = res.x[ii['i1']['qg']:ii['iN']['qg']] * c.mva_base
+    ii = get_var_idx(c)
+    res_va = rad2deg(res_x[ii['i1']['va']:ii['iN']['va']])
+    res_vm = res_x[ii['i1']['vm']:ii['iN']['vm']]
+    res_pg = res_x[ii['i1']['pg']:ii['iN']['pg']] * c.mva_base
+    res_qg = res_x[ii['i1']['qg']:ii['iN']['qg']] * c.mva_base
 
-    # float_fmtr = {'float_kind': lambda x: "%7.3f" % x}
+    float_fmtr = {'float_kind': lambda x: "%7.3f" % x}
 
-    # print('___________')  
-    # # print('     Statue | Exit mode %d' % res.status)
-    # # print('    Message | %s' % res.message)
-    # # print('       Iter | %d' % res.nit)
-    # print('  Objective | %10.3f $/hr' % res.fun)
-    # print('  VA (deg)  | %s' % np.array2string(res_va[0:7], formatter=float_fmtr))
-    # print('  VM (pu)   | %s' % np.array2string(res_vm[0:7], formatter=float_fmtr))
-    # print('  PG (MW)   | %s' % np.array2string(res_pg, formatter=float_fmtr))
-    # print('  QG (MVAR) | %s' % np.array2string(res_qg, formatter=float_fmtr))
-    # print('___________ | ')  
+    print('___________')  
+    print('     Status | Exit mode %d' % res_info['status'])
+    print('    Message | %s' % res_info['status_msg'])
+    # print('       Iter | %d' % res.nit)
+    print('  Objective | %10.3f $/hr' % res_info['obj_val'])
+    print('  VA (deg)  | %s' % np.array2string(res_va[0:7], formatter=float_fmtr))
+    print('  VM (pu)   | %s' % np.array2string(res_vm[0:7], formatter=float_fmtr))
+    print('  PG (MW)   | %s' % np.array2string(res_pg, formatter=float_fmtr))
+    print('  QG (MVAR) | %s' % np.array2string(res_qg, formatter=float_fmtr))
+    print('___________ | ')  
     
     set_trace()
     
