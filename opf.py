@@ -18,12 +18,10 @@ class opf_mdl(object):
         return costfcn_jac(x, self.case)
 
     def constraints(self, x):
-        # return simple_powerbalance_consfcn(x, self.case)
-        return acpf_consfcn(x, self.case)
+        return np.concatenate((acpf_consfcn(x, self.case), linerating_consfcn(x, self.case)))
 
     def jacobian(self, x):
-        # return simple_powerbalance_consfcn_jac(x, self.case)
-        return acpf_consfcn_jac(x, self.case)
+        return np.concatenate((acpf_consfcn_jac(x, self.case), linerating_consfcn_jac(x, self.case)))
 
     def intermediate(
         self,
@@ -40,9 +38,6 @@ class opf_mdl(object):
         ls_trials
         ):
         
-        #
-        # Example for the use of the intermediate callback.
-        #
         print('Objective value at iteration #%d is - %g' % (iter_count, obj_value))
 
 
@@ -86,13 +81,8 @@ def runcopf(c, flat_start):
     ####################################################################
     # Test Environment
     #################################################################### 
-    cl = np.zeros(2 * nb)
-    cu = np.zeros(2 * nb)
-    # cl = [0., 0.]
-    # cu = [0., 0.]
-
-    g = acpf_consfcn(x0, c)
-    dg = acpf_consfcn_jac(x0, c)
+    cl = np.concatenate((np.zeros(2 * nb), -np.inf * np.ones(2 * nbr)))
+    cu = np.concatenate((np.zeros(2 * nb), np.zeros(2 * nbr)))
 
     nlp = ipopt.problem(n=len(x0), m=len(cl), lb=xmin, ub=xmax, cl=cl, cu=cu, \
         problem_obj=opf_mdl(c))
@@ -111,7 +101,7 @@ def runcopf(c, flat_start):
     print('     Status | Exit mode %d' % res_info['status'])
     print('    Message | %s' % res_info['status_msg'])
     # print('       Iter | %d' % res_info['iter_count'])
-    print('  Objective | %10.3f $/hr' % res_info['obj_val'])
+    print('  Objective | %.3f $/hr' % res_info['obj_val'])
     print('  VA (deg)  | %s' % np.array2string(res_va[0:7], formatter=float_fmtr))
     print('  VM (pu)   | %s' % np.array2string(res_vm[0:7], formatter=float_fmtr))
     print('  PG (MW)   | %s' % np.array2string(res_pg, formatter=float_fmtr))
@@ -238,8 +228,7 @@ def acpf_consfcn_jac(x, c):
     nbr = c.branch.shape[0]
     nx  = 2 * (nb + ng)
 
-    ii = get_var_idx(c)
-
+    ii       = get_var_idx(c)
     g_idx    = np.array(range(0, ng), dtype=int)
     gbus_idx = np.array(c.gen[:, const.GEN_BUS] - 1, dtype=int)
     cons_idx = np.array(range(2 * nb), dtype=int)
@@ -289,24 +278,25 @@ def dSbus_dV(Ybus, V):
 
     return dSbus_dVa, dSbus_dVm 
 
-
 def linerating_consfcn(x, c):
     const = Const()
 
-    nb = c.bus.shape[0]
-    ng = c.gen.shape[0]
+    nb  = c.bus.shape[0]
+    ng  = c.gen.shape[0]
     nbr = c.branch.shape[0]
 
-    ii = get_var_idx(c)
-    va = x[ii['i1']['va']:ii['iN']['va']]
-    vm = x[ii['i1']['vm']:ii['iN']['vm']]
+    ii       = get_var_idx(c)
+    va_idx   = np.array(range(ii['i1']['va'], ii['iN']['va']), dtype=int)
+    vm_idx   = np.array(range(ii['i1']['vm'], ii['iN']['vm']), dtype=int)
+    fbus_idx = np.array(c.branch[:, const.F_BUS] - 1, dtype=int)
+    tbus_idx = np.array(c.branch[:, const.T_BUS] - 1, dtype=int)
+    x_idx    = np.concatenate((va_idx, vm_idx))
 
+    va    = x[va_idx]
+    vm    = x[vm_idx]
     vcplx = vm * np.exp(1j * va)
 
     _, Yf, Yt = makeYbus(c)
-
-    fbus_idx = np.array(c.branch[:, const.F_BUS] - 1, dtype=int)
-    tbus_idx = np.array(c.branch[:, const.T_BUS] - 1, dtype=int)
 
     flow_max = (c.branchrate / c.mva_base ) ** 2
     Sf = vcplx[fbus_idx] * np.conj(Yf * vcplx)
@@ -317,8 +307,93 @@ def linerating_consfcn(x, c):
     Streal_sq = np.real(St) ** 2
     Stimag_sq = np.imag(St) ** 2
 
-    return np.concatenate((flow_max - Sfreal_sq - Sfimag_sq, \
-                           flow_max - Streal_sq - Stimag_sq))
+    return np.concatenate((Sfreal_sq + Sfimag_sq - flow_max, \
+                           Streal_sq + Stimag_sq - flow_max))
+
+def linerating_consfcn_jac(x, c):
+    const = Const()
+
+    nb  = c.bus.shape[0]
+    ng  = c.gen.shape[0]
+    nbr = c.branch.shape[0]
+    nx  = 2 * (nb + ng)
+
+    ii       = get_var_idx(c)
+    va_idx   = np.array(range(ii['i1']['va'], ii['iN']['va']), dtype=int)
+    vm_idx   = np.array(range(ii['i1']['vm'], ii['iN']['vm']), dtype=int)
+    fbus_idx = np.array(c.branch[:, const.F_BUS] - 1, dtype=int)
+    tbus_idx = np.array(c.branch[:, const.T_BUS] - 1, dtype=int)
+    x_idx    = np.concatenate((va_idx, vm_idx))
+
+    va    = x[va_idx]
+    vm    = x[vm_idx]
+    vcplx = vm * np.exp(1j * va)
+
+    _, Yf, Yt = makeYbus(c)
+
+    br_idx   = np.array(range(0, nbr), dtype=int)
+    fbus_idx = np.array(c.branch[:, const.F_BUS] - 1, dtype=int)
+    tbus_idx = np.array(c.branch[:, const.T_BUS] - 1, dtype=int)
+
+    dFf_dVa, dFf_dVm, dFt_dVa, dFt_dVm, Ff, Ft = dSbr_dV(c.branch, Yf, Yt, vcplx)
+    df_dVa, df_dVm, dt_dVa, dt_dVm = dAbr_dV(dFf_dVa, dFf_dVm, dFt_dVa, dFt_dVm, Ff, Ft)
+
+    dh = lil_matrix((2*nbr, nx), dtype=float)
+    dh[:, x_idx] = vstack((hstack((df_dVa, df_dVm)),hstack((dt_dVa, dt_dVm))))
+
+    return dh.toarray().reshape(-1)
+
+def dSbr_dV(branch, Yf, Yt, V):
+    const = Const()
+
+    nb  = V.shape[0]
+    nbr = branch.shape[0]
+
+    b_idx    = np.array(range(nb), dtype=int)
+    br_idx   = np.array(range(nbr), dtype=int)
+    fbus_idx = np.array(branch[:, const.F_BUS] - 1, dtype=int)
+    tbus_idx = np.array(branch[:, const.T_BUS] - 1, dtype=int)
+
+    Vnorm = V / np.abs(V)
+    If    = Yf.dot(V)
+    It    = Yt.dot(V)
+    Sf    = V[fbus_idx] * np.conj(If)
+    St    = V[tbus_idx] * np.conj(It)
+
+    diagVf    = csr_matrix((V[fbus_idx], (br_idx, br_idx)), shape=(nbr, nbr))
+    diagIf    = csr_matrix((If, (br_idx, br_idx)), shape=(nbr, nbr))
+    diagVt    = csr_matrix((V[tbus_idx], (br_idx, br_idx)), shape=(nbr, nbr))
+    diagIt    = csr_matrix((It, (br_idx, br_idx)), shape=(nbr, nbr))
+    diagV     = csr_matrix((V, (b_idx, b_idx)), shape=(nb, nb))
+    diagVnorm = csr_matrix((Vnorm, (b_idx, b_idx)), shape=(nb, nb))
+
+    Cvf     = csr_matrix((V[fbus_idx], (br_idx, fbus_idx)), shape=(nbr, nb))
+    Cvt     = csr_matrix((V[tbus_idx], (br_idx, tbus_idx)), shape=(nbr, nb))
+    Cvnormf = csr_matrix((Vnorm[fbus_idx], (br_idx, fbus_idx)), shape=(nbr, nb))
+    Cvnormt = csr_matrix((Vnorm[tbus_idx], (br_idx, tbus_idx)), shape=(nbr, nb))
+
+    dSf_dVa = (1j) * ( np.conj(diagIf) * Cvf - diagVf * np.conj(Yf * diagV) )
+    dSt_dVa = (1j) * ( np.conj(diagIt) * Cvt - diagVt * np.conj(Yt * diagV) ) 
+    dSf_dVm = diagVf * np.conj(Yf * diagVnorm) + np.conj(diagIf) * Cvnormf
+    dSt_dVm = diagVt * np.conj(Yt * diagVnorm) + np.conj(diagIt) * Cvnormt
+
+    return dSf_dVa, dSf_dVm, dSt_dVa, dSt_dVm, Sf, St
+
+def dAbr_dV(dSf_dVa, dSf_dVm, dSt_dVa, dSt_dVm, Sf, St):
+    nbr = Sf.shape[0]
+    br_idx = np.array(range(nbr), dtype=int)
+
+    dAf_dPf = csr_matrix((2 * np.real(Sf), (br_idx, br_idx)), shape=(nbr, nbr))
+    dAf_dQf = csr_matrix((2 * np.imag(Sf), (br_idx, br_idx)), shape=(nbr, nbr))
+    dAt_dPt = csr_matrix((2 * np.real(St), (br_idx, br_idx)), shape=(nbr, nbr))
+    dAt_dQt = csr_matrix((2 * np.imag(St), (br_idx, br_idx)), shape=(nbr, nbr))
+
+    dAf_dVm = dAf_dPf * np.real(dSf_dVm) + dAf_dQf * np.imag(dSf_dVm)
+    dAf_dVa = dAf_dPf * np.real(dSf_dVa) + dAf_dQf * np.imag(dSf_dVa)
+    dAt_dVm = dAt_dPt * np.real(dSt_dVm) + dAt_dQt * np.imag(dSt_dVm)
+    dAt_dVa = dAt_dPt * np.real(dSt_dVa) + dAt_dQt * np.imag(dSt_dVa)
+
+    return dAf_dVa, dAf_dVm, dAt_dVa, dAt_dVm
 
 def simple_powerbalance_consfcn(x, c):
     const = Const() 
