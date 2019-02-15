@@ -8,8 +8,8 @@
 
 ## Code Simplification
 
-- [ ] Use `:` instead of `ndarray.take()`
 - [ ] Move `opf.makeYbus()` to `powerflow` module
+- [x] Use `:` instead of `ndarray.take()`
 
 ## Performance Improvement
 

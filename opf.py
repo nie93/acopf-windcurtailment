@@ -56,27 +56,27 @@ def runcopf(c, flat_start):
 
     if flat_start:
         # x0 = np.concatenate((deg2rad(c.bus.take(const.VA, axis=1)), \
-        #     c.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
-        #     c.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / c.mva_base, \
-        #     c.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / c.mva_base), axis=0)
+        #     c.bus[:,[const.VMIN, const.VMAX]].mean(axis=1), \
+        #     c.gen[:,[const.PMAX, const.PMIN]].mean(axis=1) / c.mva_base, \
+        #     c.gen[:,[const.QMAX, const.QMIN]].mean(axis=1) / c.mva_base), axis=0)
         x0 = np.concatenate((np.zeros(nb), \
-            c.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
-            c.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / c.mva_base, \
-            c.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / c.mva_base), axis=0)
+            c.bus[:,[const.VMIN, const.VMAX]].mean(axis=1), \
+            c.gen[:,[const.PMAX, const.PMIN]].mean(axis=1) / c.mva_base, \
+            c.gen[:,[const.QMAX, const.QMIN]].mean(axis=1) / c.mva_base), axis=0)
     else:
         x0   = np.genfromtxt(c.path+"x0.csv", delimiter=',')
         
     xmin = np.concatenate((-np.inf * np.ones(nb), \
-                           c.bus.take(const.VMIN, axis=1), \
-                           c.gen.take(const.PMIN, axis=1) / c.mva_base, \
-                           c.gen.take(const.QMIN, axis=1) / c.mva_base), axis=0)
+                           c.bus[:, const.VMIN], \
+                           c.gen[:, const.PMIN] / c.mva_base, \
+                           c.gen[:, const.QMIN] / c.mva_base), axis=0)
     xmax = np.concatenate((np.inf * np.ones(nb), \
-                           c.bus.take(const.VMAX, axis=1), \
-                           c.gen.take(const.PMAX, axis=1) / c.mva_base, \
-                           c.gen.take(const.QMAX, axis=1) / c.mva_base), axis=0)
+                           c.bus[:, const.VMAX], \
+                           c.gen[:, const.PMAX] / c.mva_base, \
+                           c.gen[:, const.QMAX] / c.mva_base), axis=0)
 
-    xmin[(c.bus.take(const.BUS_TYPE, axis=1) == 3).nonzero()] = 0
-    xmax[(c.bus.take(const.BUS_TYPE, axis=1) == 3).nonzero()] = 0
+    xmin[(c.bus[:, const.BUS_TYPE] == 3).nonzero()] = 0
+    xmax[(c.bus[:, const.BUS_TYPE] == 3).nonzero()] = 0
 
     ####################################################################
     # Test Environment
