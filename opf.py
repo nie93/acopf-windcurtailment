@@ -1,9 +1,54 @@
 from arithmetic import *
 from case import Case, Const
+import ipopt
 import numpy as np
 from scipy.sparse import *
 from scipy.optimize import *
 from pdb import *
+
+class opf_mdl(object):
+    
+    def __init__(self, c):
+        self.case = c
+
+    def objective(self, x):
+        return costfcn(x, self.case)
+        
+    def gradient(self, x):
+        return costfcn_jac(x, self.case)
+
+    def constraints(self, x):       
+        const = Const() 
+        ii = get_var_idx(self.case)
+        tload = sum(self.case.bus[:,const.PD]) / self.case.mva_base
+        return sum(x[ii['i1']['pg']:ii['iN']['pg']]) - tload
+
+    def jacobian(self, x):        
+        const = Const() 
+        ii = get_var_idx(self.case)
+        simple_powerbalance = np.zeros_like(x)
+        simple_powerbalance[ii['i1']['pg']:ii['iN']['pg']] = 1
+        return simple_powerbalance
+
+    def intermediate(
+        self,
+        alg_mod,
+        iter_count,
+        obj_value,
+        inf_pr,
+        inf_du,
+        mu,
+        d_norm,
+        regularization_size,
+        alpha_du,
+        alpha_pr,
+        ls_trials
+        ):
+        
+        #
+        # Example for the use of the intermediate callback.
+        #
+        print "Objective value at iteration #%d is - %g" % (iter_count, obj_value)
 
 
 def runcopf(c, flat_start):
@@ -14,7 +59,7 @@ def runcopf(c, flat_start):
     nbr    = c.branch.shape[0]
     neq    = 2 * nb
     niq    = 2 * ng + nb + nbr
-    neqnln = 2*nb
+    neqnln = 2 * nb
     niqnln = nbr
 
     ii = get_var_idx(c)
@@ -40,58 +85,34 @@ def runcopf(c, flat_start):
     xmax[(c.bus.take(const.BUS_TYPE, axis=1) == 3).nonzero()] = 0
 
     ####################################################################
-    # Polynomial Cost Functions (f)
-    #################################################################### 
-    f_fcn   = lambda x: costfcn(x, c)
-    df_fcn  = lambda x: costfcn_jac(x, c)
-    d2f_fcn = lambda x: costfcn_hess(x, c)
-
-    ####################################################################
-    # Simple Power Balance Constraint (Linear, lossless)
-    ####################################################################   
-    simple_powerbalance = np.zeros_like(x0)
-    tload = sum(c.bus[:,const.PD]) / c.mva_base
-    simple_powerbalance[ii['i1']['pg']:ii['iN']['pg']] = 1
-    simple_lincons = {'type': 'eq',
-        'fun' : lambda x: sum(x[ii['i1']['pg']:ii['iN']['pg']]) - tload,
-        'jac' : lambda x: simple_powerbalance}
-    
-    ####################################################################
-    # Nonlinear Power Flow Constraints (g: eqcons, h: ineqcons)
-    ####################################################################   
-    eqcons   = {'type': 'eq',
-                'fun' : lambda x: acpf_consfcn(x, c)}
-    ineqcons = {'type': 'ineq',
-                'fun' : lambda x: linerating_consfcn(x, c)}
-
-    ####################################################################
     # Test Environment
     #################################################################### 
-    all_cons = (eqcons, ineqcons)
-    bnds = build_bound_cons(xmin, xmax)
-    res = minimize(f_fcn, x0, jac=df_fcn, hess=d2f_fcn, bounds=bnds, \
-        constraints=all_cons, options={'disp': False})
+    cl = [0.]
+    cu = [0.]
 
-    ll = linerating_consfcn(res.x, c)
+    nlp = ipopt.problem(n=len(x0), m=len(cl), lb=xmin, ub=xmax, cl=cl, cu=cu, \
+        problem_obj=opf_mdl(c))
 
-    ii = get_var_idx(c)
-    res_va = rad2deg(res.x[ii['i1']['va']:ii['iN']['va']])
-    res_vm = res.x[ii['i1']['vm']:ii['iN']['vm']]
-    res_pg = res.x[ii['i1']['pg']:ii['iN']['pg']] * c.mva_base
-    res_qg = res.x[ii['i1']['qg']:ii['iN']['qg']] * c.mva_base
+    res = nlp.solve(x0)
 
-    float_fmtr = {'float_kind': lambda x: "%7.3f" % x}
+    # ii = get_var_idx(c)
+    # res_va = rad2deg(res.x[ii['i1']['va']:ii['iN']['va']])
+    # res_vm = res.x[ii['i1']['vm']:ii['iN']['vm']]
+    # res_pg = res.x[ii['i1']['pg']:ii['iN']['pg']] * c.mva_base
+    # res_qg = res.x[ii['i1']['qg']:ii['iN']['qg']] * c.mva_base
 
-    print('___________')  
-    print('     Statue | Exit mode %d' % res.status)
-    print('    Message | %s' % res.message)
-    print('       Iter | %d' % res.nit)
-    print('  Objective | %10.3f $/hr' % res.fun)
-    print('  VA (deg)  | %s' % np.array2string(res_va[0:7], formatter=float_fmtr))
-    print('  VM (pu)   | %s' % np.array2string(res_vm[0:7], formatter=float_fmtr))
-    print('  PG (MW)   | %s' % np.array2string(res_pg, formatter=float_fmtr))
-    print('  QG (MVAR) | %s' % np.array2string(res_qg, formatter=float_fmtr))
-    print('___________ | ')  
+    # float_fmtr = {'float_kind': lambda x: "%7.3f" % x}
+
+    # print('___________')  
+    # # print('     Statue | Exit mode %d' % res.status)
+    # # print('    Message | %s' % res.message)
+    # # print('       Iter | %d' % res.nit)
+    # print('  Objective | %10.3f $/hr' % res.fun)
+    # print('  VA (deg)  | %s' % np.array2string(res_va[0:7], formatter=float_fmtr))
+    # print('  VM (pu)   | %s' % np.array2string(res_vm[0:7], formatter=float_fmtr))
+    # print('  PG (MW)   | %s' % np.array2string(res_pg, formatter=float_fmtr))
+    # print('  QG (MVAR) | %s' % np.array2string(res_qg, formatter=float_fmtr))
+    # print('___________ | ')  
     
     set_trace()
     

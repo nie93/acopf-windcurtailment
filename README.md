@@ -16,7 +16,7 @@
 
 #### Package Requirements
 
-```
+```sh
 $ sudo apt install cython
 $ sudo apt-get -y install liblapack-dev libblas-dev
 $ sudo apt-get -y install gfortran
@@ -26,7 +26,7 @@ $ sudo apt install python-numpy python-six python-future
 
 #### Build and Install `cyipopt`
 
-```
+```sh
 $ git clone https://github.com/matthias-k/cyipopt.git
 $ cd cyipopt
 $ python setup.py build
@@ -34,16 +34,16 @@ $ python setup.py build
 
 Check that everything linked correctly with `ldd` (depends on the CPU architecture):
 
-```
+```sh
 $ ldd build/lib.linux-x86_64-2.7/cyipopt.so
 ```
 
-```
+```sh
 $ ldd build/lib.linux-armv7l-2.7/cyipopt.so
 ```
 
 Then, install
 
-```
+```sh
 $ sudo python setup.py install
 ```
