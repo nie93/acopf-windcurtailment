@@ -18,12 +18,12 @@ class opf_mdl(object):
         return costfcn_jac(x, self.case)
 
     def constraints(self, x):
-        return simple_powerbalance_consfcn(x, self.case)
-        # return acpf_consfcn(x, self.case)
+        # return simple_powerbalance_consfcn(x, self.case)
+        return acpf_consfcn(x, self.case)
 
     def jacobian(self, x):
-        return simple_powerbalance_consfcn_jac(x, self.case)
-        # return acpf_consfcn_jac(x, self.case)
+        # return simple_powerbalance_consfcn_jac(x, self.case)
+        return acpf_consfcn_jac(x, self.case)
 
     def intermediate(
         self,
@@ -86,13 +86,13 @@ def runcopf(c, flat_start):
     ####################################################################
     # Test Environment
     #################################################################### 
-    # cl = np.zeros(2 * nb)
-    # cu = np.zeros(2 * nb)
-    cl = [0., 0.]
-    cu = [0., 0.]
+    cl = np.zeros(2 * nb)
+    cu = np.zeros(2 * nb)
+    # cl = [0., 0.]
+    # cu = [0., 0.]
 
+    g = acpf_consfcn(x0, c)
     dg = acpf_consfcn_jac(x0, c)
-    set_trace()
 
     nlp = ipopt.problem(n=len(x0), m=len(cl), lb=xmin, ub=xmax, cl=cl, cu=cu, \
         problem_obj=opf_mdl(c))
@@ -263,7 +263,7 @@ def acpf_consfcn_jac(x, c):
 
     dSdVa, dSdVm = dSbus_dV(Ybus, vcplx)
     dSdV = hstack((dSdVa, dSdVm))
-    neg_Cg = csr_matrix((np.ones(ng), (gbus_idx, g_idx)), shape=(nb, ng))
+    neg_Cg = csr_matrix((-np.ones(ng), (gbus_idx, g_idx)), shape=(nb, ng))
     zeros_b_g = csr_matrix(([],([],[])), shape=(nb, ng))
 
     dpinj = hstack((csr_matrix(np.real(dSdV.toarray())), neg_Cg, zeros_b_g))
@@ -271,8 +271,8 @@ def acpf_consfcn_jac(x, c):
 
     dg = lil_matrix((2*nb, nx), dtype=float)
     dg[:, x_idx] = vstack((dpinj, dqinj))
-    
-    return dg.T
+
+    return dg.toarray().reshape(-1)
 
 def dSbus_dV(Ybus, V):
     nb = V.shape[0]
