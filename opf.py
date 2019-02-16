@@ -18,29 +18,27 @@ def runcopf(c):
 
     ii = get_var_idx(c)
 
-    x0 = np.concatenate((deg2rad(c.bus.take(const.VA, axis=1)), \
-                         c.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
-                         c.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / c.mva_base, \
-                         c.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / c.mva_base), axis=0)
-
+    # x0 = np.concatenate((deg2rad(c.bus.take(const.VA, axis=1)), \
+    #     c.bus[:,[const.VMIN, const.VMAX]].mean(axis=1), \
+    #     c.gen[:,[const.PMAX, const.PMIN]].mean(axis=1) / c.mva_base, \
+    #     c.gen[:,[const.QMAX, const.QMIN]].mean(axis=1) / c.mva_base), axis=0)
     x0 = np.concatenate((np.zeros(nb), \
-                         c.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
-                         c.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / c.mva_base, \
-                         c.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / c.mva_base), axis=0)
-
+        c.bus[:, [const.VMIN, const.VMAX]].mean(axis=1), \
+        c.gen[:, [const.PMAX, const.PMIN]].mean(axis=1) / c.mva_base, \
+        c.gen[:, [const.QMAX, const.QMIN]].mean(axis=1) / c.mva_base), axis=0)    
+    
     xmin = np.concatenate((-np.inf * np.ones(nb), \
-                           c.bus.take(const.VMIN, axis=1), \
-                           c.gen.take(const.PMIN, axis=1) / c.mva_base, \
-                           c.gen.take(const.QMIN, axis=1) / c.mva_base), axis=0)
-
+                           c.bus[:, const.VMIN], \
+                           c.gen[:, const.PMIN] / c.mva_base, \
+                           c.gen[:, const.QMIN] / c.mva_base), axis=0)
     xmax = np.concatenate((np.inf * np.ones(nb), \
-                           c.bus.take(const.VMAX, axis=1), \
-                           c.gen.take(const.PMAX, axis=1) / c.mva_base, \
-                           c.gen.take(const.QMAX, axis=1) / c.mva_base), axis=0)
+                           c.bus[:, const.VMAX], \
+                           c.gen[:, const.PMAX] / c.mva_base, \
+                           c.gen[:, const.QMAX] / c.mva_base), axis=0)
 
-    xmin[(c.bus.take(const.BUS_TYPE, axis=1) == 3).nonzero()] = 0
-    xmax[(c.bus.take(const.BUS_TYPE, axis=1) == 3).nonzero()] = 0
-
+    xmin[(c.bus[:, const.BUS_TYPE] == 3).nonzero()] = 0
+    xmax[(c.bus[:, const.BUS_TYPE] == 3).nonzero()] = 0
+   
     ####################################################################
     # Polynomial Cost Functions (f)
     #################################################################### 
@@ -76,24 +74,29 @@ def runcopf(c):
     # Test Environment
     ####################################################################    
     res = minimize(f_fcn, x0, jac=df_fcn, hess=d2f_fcn, method='trust-constr', \
-                   constraints=[eqcons], bounds=Bounds(xmin, xmax))
+        constraints=(eqcons, ineqcons), bounds=Bounds(xmin, xmax), \
+        options={'disp': True})
 
-    if res.success:
-        ii = get_var_idx(c)
-        pg_sched = res.x[ii['i1']['pg']:ii['iN']['pg']] * c.mva_base
-        qg_sched = res.x[ii['i1']['qg']:ii['iN']['qg']] * c.mva_base
+    ii = get_var_idx(c)
+    res_va = rad2deg(res.x[ii['i1']['va']:ii['iN']['va']])
+    res_vm = res.x[ii['i1']['vm']:ii['iN']['vm']]
+    res_pg = res.x[ii['i1']['pg']:ii['iN']['pg']] * c.mva_base
+    res_qg = res.x[ii['i1']['qg']:ii['iN']['qg']] * c.mva_base
 
-        mw_fmtr   = {'float_kind':lambda x: "%7.3f MW  " % x}
-        mvar_fmtr = {'float_kind':lambda x: "%7.3f MVar" % x}
-        print('')
-        print('  Status | Optimization numerically successed: %s' % res.message)
-        print('    Iter | %d' % res.nit)
-        print('      PG | %s' % np.array2string(pg_sched, formatter=mw_fmtr))
-        print('      QG | %s' % np.array2string(qg_sched, formatter=mvar_fmtr))
-    else:
-        print('  Status | Optimization numerically failed: %s' % res.message)
-    
-    set_trace()
+    float_fmtr = {'float_kind': lambda x: "%7.3f" % x}
+
+    print('___________')  
+    print('     Statue | Exit mode %d' % res.status)
+    print('    Message | %s' % res.message)
+    print('       Iter | %d' % res.niter)
+    print('  Objective | %.3f $/hr' % res.fun)
+    print('  VA (deg)  | %s' % np.array2string(res_va[0:7], formatter=float_fmtr))
+    print('  VM (pu)   | %s' % np.array2string(res_vm[0:7], formatter=float_fmtr))
+    print('  PG (MW)   | %s' % np.array2string(res_pg, formatter=float_fmtr))
+    print('  QG (MVAR) | %s' % np.array2string(res_qg, formatter=float_fmtr))
+    print('___________ | ') 
+
+    # set_trace()
     
 
 # region [ Cost-Related Functions ]

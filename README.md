@@ -3,4 +3,4 @@
 ## Requirements
 
 * numpy (==1.16.1+mkl)
-* scipy (==1.2.0)
+* scipy (==1.2.1)
