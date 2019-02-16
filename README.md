@@ -4,6 +4,7 @@
 
 ## Development Environment
 
+* Windows
 * numpy (==1.16.1+mkl)
 * scipy (==0.19.0)
 
