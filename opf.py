@@ -90,17 +90,17 @@ def runcopf(c, flat_start):
 
     float_fmtr = {'float_kind': lambda x: "%7.3f" % x}
 
-    print('___________')  
-    print('     Statue | Exit mode %d' % res.status)
-    print('    Message | %s' % res.message)
-    print('       Iter | %d' % res.nit)
-    print('   Time (s) | %.8f' % (end_time - start_time))
-    print('  Objective | %.3f $/hr' % res.fun)
-    print('  VA (deg)  | %s' % np.array2string(res_va[0:7], formatter=float_fmtr))
-    print('  VM (pu)   | %s' % np.array2string(res_vm[0:7], formatter=float_fmtr))
-    print('  PG (MW)   | %s' % np.array2string(res_pg, formatter=float_fmtr))
-    print('  QG (MVAR) | %s' % np.array2string(res_qg, formatter=float_fmtr))
-    print('___________ | ')  
+    # print('___________')  
+    # print('     Statue | Exit mode %d' % res.status)
+    # print('    Message | %s' % res.message)
+    # print('       Iter | %d' % res.nit)
+    # print('   Time (s) | %.8f' % (end_time - start_time))
+    # print('  Objective | %.3f $/hr' % res.fun)
+    # print('  VA (deg)  | %s' % np.array2string(res_va[0:7], formatter=float_fmtr))
+    # print('  VM (pu)   | %s' % np.array2string(res_vm[0:7], formatter=float_fmtr))
+    # print('  PG (MW)   | %s' % np.array2string(res_pg, formatter=float_fmtr))
+    # print('  QG (MVAR) | %s' % np.array2string(res_qg, formatter=float_fmtr))
+    # print('___________ | ')  
     
 
 # region [ Cost-Related Functions ]
