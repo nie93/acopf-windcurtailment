@@ -3,6 +3,7 @@ from case import Case, Const
 import numpy as np
 from scipy.sparse import *
 from scipy.optimize import *
+from time import time
 from pdb import *
 
 
@@ -75,10 +76,11 @@ def runcopf(c, flat_start):
     #################################################################### 
     all_cons = (eqcons, ineqcons)
     bnds = build_bound_cons(xmin, xmax)
+
+    start_time = time()
     res = minimize(f_fcn, x0, jac=df_fcn, hess=d2f_fcn, bounds=bnds, \
         constraints=all_cons, options={'disp': False})
-
-    ll = linerating_consfcn(res.x, c)
+    end_time = time()
 
     ii = get_var_idx(c)
     res_va = rad2deg(res.x[ii['i1']['va']:ii['iN']['va']])
@@ -92,14 +94,13 @@ def runcopf(c, flat_start):
     print('     Statue | Exit mode %d' % res.status)
     print('    Message | %s' % res.message)
     print('       Iter | %d' % res.nit)
-    print('  Objective | %10.3f $/hr' % res.fun)
+    print('   Time (s) | %.8f' % (end_time - start_time))
+    print('  Objective | %.3f $/hr' % res.fun)
     print('  VA (deg)  | %s' % np.array2string(res_va[0:7], formatter=float_fmtr))
     print('  VM (pu)   | %s' % np.array2string(res_vm[0:7], formatter=float_fmtr))
     print('  PG (MW)   | %s' % np.array2string(res_pg, formatter=float_fmtr))
     print('  QG (MVAR) | %s' % np.array2string(res_qg, formatter=float_fmtr))
     print('___________ | ')  
-    
-    set_trace()
     
 
 # region [ Cost-Related Functions ]
@@ -386,7 +387,6 @@ def dAbr_dV(dSf_dVa, dSf_dVm, dSt_dVa, dSt_dVm, Sf, St):
     dAt_dVa = dAt_dPt * np.real(dSt_dVa) + dAt_dQt * np.imag(dSt_dVa)
 
     return dAf_dVa, dAf_dVm, dAt_dVa, dAt_dVm
-
 
 # endregion
 
