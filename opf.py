@@ -20,24 +20,28 @@ def runcopf(c, flat_start):
     ii = get_var_idx(c)
 
     if flat_start:
-        x0 = np.concatenate((deg2rad(c.bus.take(const.VA, axis=1)), \
-            c.bus.take([const.VMAX, const.VMIN], axis=1).mean(axis=1), \
-            c.gen.take([const.PMAX, const.PMIN], axis=1).mean(axis=1) / c.mva_base, \
-            c.gen.take([const.QMAX, const.QMIN], axis=1).mean(axis=1) / c.mva_base), axis=0)
+        # x0 = np.concatenate((deg2rad(c.bus.take(const.VA, axis=1)), \
+        #     c.bus[:,[const.VMIN, const.VMAX]].mean(axis=1), \
+        #     c.gen[:,[const.PMAX, const.PMIN]].mean(axis=1) / c.mva_base, \
+        #     c.gen[:,[const.QMAX, const.QMIN]].mean(axis=1) / c.mva_base), axis=0)
+        x0 = np.concatenate((np.zeros(nb), \
+            c.bus[:,[const.VMIN, const.VMAX]].mean(axis=1), \
+            c.gen[:,[const.PMAX, const.PMIN]].mean(axis=1) / c.mva_base, \
+            c.gen[:,[const.QMAX, const.QMIN]].mean(axis=1) / c.mva_base), axis=0)
     else:
-        x0   = np.genfromtxt(c.path+"x0.csv", delimiter=',')
+        x0 = np.genfromtxt(c.path+"x0.csv", delimiter=',')
         
     xmin = np.concatenate((-np.inf * np.ones(nb), \
-                           c.bus.take(const.VMIN, axis=1), \
-                           c.gen.take(const.PMIN, axis=1) / c.mva_base, \
-                           c.gen.take(const.QMIN, axis=1) / c.mva_base), axis=0)
+                           c.bus[:, const.VMIN], \
+                           c.gen[:, const.PMIN] / c.mva_base, \
+                           c.gen[:, const.QMIN] / c.mva_base), axis=0)
     xmax = np.concatenate((np.inf * np.ones(nb), \
-                           c.bus.take(const.VMAX, axis=1), \
-                           c.gen.take(const.PMAX, axis=1) / c.mva_base, \
-                           c.gen.take(const.QMAX, axis=1) / c.mva_base), axis=0)
+                           c.bus[:, const.VMAX], \
+                           c.gen[:, const.PMAX] / c.mva_base, \
+                           c.gen[:, const.QMAX] / c.mva_base), axis=0)
 
-    xmin[(c.bus.take(const.BUS_TYPE, axis=1) == 3).nonzero()] = 0
-    xmax[(c.bus.take(const.BUS_TYPE, axis=1) == 3).nonzero()] = 0
+    xmin[(c.bus[:, const.BUS_TYPE] == 3).nonzero()] = 0
+    xmax[(c.bus[:, const.BUS_TYPE] == 3).nonzero()] = 0
 
     ####################################################################
     # Polynomial Cost Functions (f)
@@ -58,11 +62,13 @@ def runcopf(c, flat_start):
     
     ####################################################################
     # Nonlinear Power Flow Constraints (g: eqcons, h: ineqcons)
-    ####################################################################   
+    ####################################################################  
     eqcons   = {'type': 'eq',
-                'fun' : lambda x: acpf_consfcn(x, c)}
+                'fun' : lambda x: acpf_consfcn(x, c),
+                'jac' : lambda x: acpf_consfcn_jac(x, c)}
     ineqcons = {'type': 'ineq',
-                'fun' : lambda x: linerating_consfcn(x, c)}
+                'fun' : lambda x: linerating_consfcn(x, c),
+                'jac' : lambda x: linerating_consfcn_jac(x, c)}
 
     ####################################################################
     # Test Environment
@@ -180,7 +186,8 @@ def build_bound_cons(xmin, xmax):
     for vi in range(len(xmin)):
         b += ((xmin[vi], xmax[vi]),)
     return b
-    
+
+
 def acpf_consfcn(x, c):
     const = Const()
 
@@ -205,60 +212,83 @@ def acpf_consfcn(x, c):
 
     return np.concatenate((np.real(mis), np.imag(mis)))
 
-# def acpf_consfcn_jac(x, c):
-#     const = Const()
+def acpf_consfcn_jac(x, c):
+    const = Const()
 
-#     nb = c.bus.shape[0]
-#     ng = c.gen.shape[0]
-#     nbr = c.branch.shape[0]
-#     nx = 2 * (nb + ng)
+    nb  = c.bus.shape[0]
+    ng  = c.gen.shape[0]
+    nbr = c.branch.shape[0]
+    nx  = 2 * (nb + ng)
 
-#     ii = get_var_idx(c)
-#     va = x[ii['i1']['va']:ii['iN']['va']]
-#     vm = x[ii['i1']['vm']:ii['iN']['vm']]
-#     pg = x[ii['i1']['pg']:ii['iN']['pg']]
-#     qg = x[ii['i1']['qg']:ii['iN']['qg']]
+    ii       = get_var_idx(c)
+    g_idx    = np.array(range(0, ng), dtype=int)
+    gbus_idx = np.array(c.gen[:, const.GEN_BUS] - 1, dtype=int)
+    cons_idx = np.array(range(2 * nb), dtype=int)
+    va_idx   = np.array(range(ii['i1']['va'], ii['iN']['va']), dtype=int)
+    vm_idx   = np.array(range(ii['i1']['vm'], ii['iN']['vm']), dtype=int)
+    pg_idx   = np.array(range(ii['i1']['pg'], ii['iN']['pg']), dtype=int)
+    qg_idx   = np.array(range(ii['i1']['qg'], ii['iN']['qg']), dtype=int)
+    x_idx    = np.concatenate((va_idx, vm_idx, pg_idx, qg_idx))
 
-#     vcplx = vm * np.exp(1j * va)
-#     c.gen[:, const.PG] = c.mva_base * pg
-#     c.gen[:, const.QG] = c.mva_base * qg
+    va = x[va_idx]
+    vm = x[vm_idx]
+    pg = x[pg_idx]
+    qg = x[qg_idx]
 
-#     Ybus = makeYbus(c)
-#     Sbus = makeSbus(c.mva_base, c.bus, c.gen)
+    vcplx = vm * np.exp(1j * va)
+    c.gen[:, const.PG] = c.mva_base * pg
+    c.gen[:, const.QG] = c.mva_base * qg
 
-#     dSdVa = dSbus_dVa(Ybus, vcplx)
-#     dSdVm = dSbus_dVm(Ybus, vcplx)
+    Ybus, _, _ = makeYbus(c)
+    Sbus = makeSbus(c.mva_base, c.bus, c.gen)
 
-#     # dg = csr_matrix(, shape=(2*nb, nx))
+    dSdVa, dSdVm = dSbus_dV(Ybus, vcplx)
+    dSdV = hstack((dSdVa, dSdVm))
+    neg_Cg = csr_matrix((-np.ones(ng), (gbus_idx, g_idx)), shape=(nb, ng))
+    zeros_b_g = csr_matrix(([],([],[])), shape=(nb, ng))
 
-#     return 0
+    dpinj = hstack((csr_matrix(np.real(dSdV.toarray())), neg_Cg, zeros_b_g))
+    dqinj = hstack((csr_matrix(np.imag(dSdV.toarray())), zeros_b_g, neg_Cg))
 
-# def dSbus_dVa(Ybus, V):
+    dg = lil_matrix((2*nb, nx), dtype=float)
+    dg[:, x_idx] = vstack((dpinj, dqinj))
 
-#     return 0
+    return dg.toarray()
 
-# def dSbus_dVm(Ybus, V):
+def dSbus_dV(Ybus, V):
+    nb = V.shape[0]
+    I = Ybus.dot(V)
 
-#     return 0
+    b_idx = np.array(range(nb), dtype=int)
 
+    diagV = csr_matrix((V, (b_idx, b_idx)), shape=(nb, nb))
+    diagI = csr_matrix((I, (b_idx, b_idx)), shape=(nb, nb))
+    diagVnorm = csr_matrix((V/np.abs(V), (b_idx, b_idx)), shape=(nb, nb))
+
+    dSbus_dVa = ((1j) * diagV).dot(np.conj(diagI - Ybus.dot(diagV)))
+    dSbus_dVm = diagV.dot(np.conj(Ybus.dot(diagVnorm))) + np.conj(diagI).dot(diagVnorm)
+
+    return dSbus_dVa, dSbus_dVm 
 
 def linerating_consfcn(x, c):
     const = Const()
 
-    nb = c.bus.shape[0]
-    ng = c.gen.shape[0]
+    nb  = c.bus.shape[0]
+    ng  = c.gen.shape[0]
     nbr = c.branch.shape[0]
 
-    ii = get_var_idx(c)
-    va = x[ii['i1']['va']:ii['iN']['va']]
-    vm = x[ii['i1']['vm']:ii['iN']['vm']]
+    ii       = get_var_idx(c)
+    va_idx   = np.array(range(ii['i1']['va'], ii['iN']['va']), dtype=int)
+    vm_idx   = np.array(range(ii['i1']['vm'], ii['iN']['vm']), dtype=int)
+    fbus_idx = np.array(c.branch[:, const.F_BUS] - 1, dtype=int)
+    tbus_idx = np.array(c.branch[:, const.T_BUS] - 1, dtype=int)
+    x_idx    = np.concatenate((va_idx, vm_idx))
 
+    va    = x[va_idx]
+    vm    = x[vm_idx]
     vcplx = vm * np.exp(1j * va)
 
     _, Yf, Yt = makeYbus(c)
-
-    fbus_idx = np.array(c.branch[:, const.F_BUS] - 1, dtype=int)
-    tbus_idx = np.array(c.branch[:, const.T_BUS] - 1, dtype=int)
 
     flow_max = (c.branchrate / c.mva_base ) ** 2
     Sf = vcplx[fbus_idx] * np.conj(Yf * vcplx)
@@ -269,8 +299,94 @@ def linerating_consfcn(x, c):
     Streal_sq = np.real(St) ** 2
     Stimag_sq = np.imag(St) ** 2
 
-    return np.concatenate((flow_max - Sfreal_sq - Sfimag_sq, \
-                           flow_max - Streal_sq - Stimag_sq))
+    return - np.concatenate((Sfreal_sq + Sfimag_sq - flow_max, \
+                           Streal_sq + Stimag_sq - flow_max))
+
+def linerating_consfcn_jac(x, c):
+    const = Const()
+
+    nb  = c.bus.shape[0]
+    ng  = c.gen.shape[0]
+    nbr = c.branch.shape[0]
+    nx  = 2 * (nb + ng)
+
+    ii       = get_var_idx(c)
+    va_idx   = np.array(range(ii['i1']['va'], ii['iN']['va']), dtype=int)
+    vm_idx   = np.array(range(ii['i1']['vm'], ii['iN']['vm']), dtype=int)
+    fbus_idx = np.array(c.branch[:, const.F_BUS] - 1, dtype=int)
+    tbus_idx = np.array(c.branch[:, const.T_BUS] - 1, dtype=int)
+    x_idx    = np.concatenate((va_idx, vm_idx))
+
+    va    = x[va_idx]
+    vm    = x[vm_idx]
+    vcplx = vm * np.exp(1j * va)
+
+    _, Yf, Yt = makeYbus(c)
+
+    br_idx   = np.array(range(0, nbr), dtype=int)
+    fbus_idx = np.array(c.branch[:, const.F_BUS] - 1, dtype=int)
+    tbus_idx = np.array(c.branch[:, const.T_BUS] - 1, dtype=int)
+
+    dFf_dVa, dFf_dVm, dFt_dVa, dFt_dVm, Ff, Ft = dSbr_dV(c.branch, Yf, Yt, vcplx)
+    df_dVa, df_dVm, dt_dVa, dt_dVm = dAbr_dV(dFf_dVa, dFf_dVm, dFt_dVa, dFt_dVm, Ff, Ft)
+
+    dh = lil_matrix((2*nbr, nx), dtype=float)
+    dh[:, x_idx] = vstack((hstack((df_dVa, df_dVm)),hstack((dt_dVa, dt_dVm))))
+
+    return -dh.toarray()
+
+def dSbr_dV(branch, Yf, Yt, V):
+    const = Const()
+
+    nb  = V.shape[0]
+    nbr = branch.shape[0]
+
+    b_idx    = np.array(range(nb), dtype=int)
+    br_idx   = np.array(range(nbr), dtype=int)
+    fbus_idx = np.array(branch[:, const.F_BUS] - 1, dtype=int)
+    tbus_idx = np.array(branch[:, const.T_BUS] - 1, dtype=int)
+
+    Vnorm = V / np.abs(V)
+    If    = Yf.dot(V)
+    It    = Yt.dot(V)
+    Sf    = V[fbus_idx] * np.conj(If)
+    St    = V[tbus_idx] * np.conj(It)
+
+    diagVf    = csr_matrix((V[fbus_idx], (br_idx, br_idx)), shape=(nbr, nbr))
+    diagIf    = csr_matrix((If, (br_idx, br_idx)), shape=(nbr, nbr))
+    diagVt    = csr_matrix((V[tbus_idx], (br_idx, br_idx)), shape=(nbr, nbr))
+    diagIt    = csr_matrix((It, (br_idx, br_idx)), shape=(nbr, nbr))
+    diagV     = csr_matrix((V, (b_idx, b_idx)), shape=(nb, nb))
+    diagVnorm = csr_matrix((Vnorm, (b_idx, b_idx)), shape=(nb, nb))
+
+    Cvf     = csr_matrix((V[fbus_idx], (br_idx, fbus_idx)), shape=(nbr, nb))
+    Cvt     = csr_matrix((V[tbus_idx], (br_idx, tbus_idx)), shape=(nbr, nb))
+    Cvnormf = csr_matrix((Vnorm[fbus_idx], (br_idx, fbus_idx)), shape=(nbr, nb))
+    Cvnormt = csr_matrix((Vnorm[tbus_idx], (br_idx, tbus_idx)), shape=(nbr, nb))
+
+    dSf_dVa = (1j) * ( np.conj(diagIf) * Cvf - diagVf * np.conj(Yf * diagV) )
+    dSt_dVa = (1j) * ( np.conj(diagIt) * Cvt - diagVt * np.conj(Yt * diagV) ) 
+    dSf_dVm = diagVf * np.conj(Yf * diagVnorm) + np.conj(diagIf) * Cvnormf
+    dSt_dVm = diagVt * np.conj(Yt * diagVnorm) + np.conj(diagIt) * Cvnormt
+
+    return dSf_dVa, dSf_dVm, dSt_dVa, dSt_dVm, Sf, St
+
+def dAbr_dV(dSf_dVa, dSf_dVm, dSt_dVa, dSt_dVm, Sf, St):
+    nbr = Sf.shape[0]
+    br_idx = np.array(range(nbr), dtype=int)
+
+    dAf_dPf = csr_matrix((2 * np.real(Sf), (br_idx, br_idx)), shape=(nbr, nbr))
+    dAf_dQf = csr_matrix((2 * np.imag(Sf), (br_idx, br_idx)), shape=(nbr, nbr))
+    dAt_dPt = csr_matrix((2 * np.real(St), (br_idx, br_idx)), shape=(nbr, nbr))
+    dAt_dQt = csr_matrix((2 * np.imag(St), (br_idx, br_idx)), shape=(nbr, nbr))
+
+    dAf_dVm = dAf_dPf * np.real(dSf_dVm) + dAf_dQf * np.imag(dSf_dVm)
+    dAf_dVa = dAf_dPf * np.real(dSf_dVa) + dAf_dQf * np.imag(dSf_dVa)
+    dAt_dVm = dAt_dPt * np.real(dSt_dVm) + dAt_dQt * np.imag(dSt_dVm)
+    dAt_dVa = dAt_dPt * np.real(dSt_dVa) + dAt_dQt * np.imag(dSt_dVa)
+
+    return dAf_dVa, dAf_dVm, dAt_dVa, dAt_dVm
+
 
 # endregion
 
