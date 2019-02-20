@@ -22,7 +22,7 @@ $ sudo apt install cython
 $ sudo apt-get -y install liblapack-dev libblas-dev
 $ sudo apt-get -y install gfortran
 $ sudo apt install coinor-libipopt1v5 coinor-libipopt-dev
-$ sudo apt install python-numpy python-six python-future
+$ sudo apt install python-numpy python-scipy python-six python-future
 ```
 
 #### Build and Install `cyipopt`
