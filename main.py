@@ -1,3 +1,4 @@
+from adapter import C37118InputDataAdapter
 from case import Case, Const
 import opf
 from time import time
@@ -5,15 +6,25 @@ from pdb import *
 
 
 def main():
+
+    c37118_data_adapter = C37118InputDataAdapter()
+    c37118_data_adapter.add_connection({"ip": "192.168.1.119", "port": 4712, "id": 9})
+    c37118_data_adapter.add_connection({"ip": "192.168.1.119", "port": 4722, "id": 9})
+    c37118_data_adapter.connect_pmu()
+    c37118_data_adapter.close()
+    frame = c37118_data_adapter.get_pmu_measurements()
+    set_trace()
+
+
     const = Const()
-    casepath = r"""C:\\Users\\niezj\\Documents\\wsu\\Research\\ARPAE\\acopf\\acopf_windcurtail_python\\case14mod\\"""
+    casepath = './case14mod/'
     c = Case()
     c.import_case(casepath)
     c.set_gen_prop(const.PMAX, [1,2,3], [30, 80, 80])
     c.set_branch_prop('RATE', [14], [34.999])
     c.scale_branch_prop([const.BR_R, const.BR_X], multi=1.0)    
     
-    for i in range(0,100):
+    for i in range(0,1):
         start_time = time()
         opf.runcopf(c, flat_start=False)
         end_time = time()
