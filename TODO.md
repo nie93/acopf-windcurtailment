@@ -15,7 +15,7 @@
 ## Performance Improvement
 
 - [ ] Use sparse matrices when necessary
-- [ ] Added `dg`, `d2g`, `dh`, `d2h` for better convergence
+- [x] Added `dg`, `dh` for better convergence
 
 ## Issues
 
