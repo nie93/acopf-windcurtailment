@@ -1,15 +1,16 @@
 from synchrophasor.pdc import Pdc
 from synchrophasor.frame import DataFrame
 import threading
-from pdb import *
+from pdb import set_trace
 
-class C37118InputDataAdapter():
+# class C37118Thread(threading.Thread):    
+
+class C37118InputDataAdapter(object):
 
     def __init__(self):
         self.s = None
         self.pdc = None
         self.dframes = dict()
-        self.pmustr = list()
         self.channel_names = dict()
         self.connection_dicts = list()
         self.lock = threading.Lock()
@@ -21,14 +22,13 @@ class C37118InputDataAdapter():
         self.pdc = list()
         for conn_dict in self.connection_dicts:
             pmu = Pdc(pdc_id=conn_dict["id"], pmu_ip=conn_dict["ip"], pmu_port=conn_dict["port"])
-            # pmu.logger.setLevel("DEBUG")
+            pmu.logger.setLevel("DEBUG")
             try:
                 pmu.run()
                 pmukey = "%s:%d" % (pmu.pmu_ip, pmu.pmu_port)
-                self.pmustr.append(pmukey)
                 self.channel_names[pmukey] = [chkey.replace(" ", "") for chkey in pmu.get_config().get_channel_names()]                     
                 self.pdc.append(pmu)
-            except Exception:
+            except:
                 pass
         
         for pmu in self.pdc:
@@ -42,7 +42,7 @@ class C37118InputDataAdapter():
         if self.pdc is None:
             return False
 
-        for i in range(0,30):
+        for i in range(0, 30):
             _dframes = list()
             for pmu in self.pdc:
                 data = pmu.get()
@@ -52,10 +52,9 @@ class C37118InputDataAdapter():
             self.dframes = _dframes[:]
             self.lock.release()
 
-        set_trace()
 
     def get_pmu_measurements(self):
-        if self.dframes is None:
+        if not self.dframes:
             return None
         
         _dframes = self.dframes[:]
@@ -65,8 +64,10 @@ class C37118InputDataAdapter():
         return phasors
 
     def parse_dframes(self, dframes):
-        data = dict()
+        if not dframes:
+            return None
 
+        data = dict()
         for i, pmu in enumerate(self.pdc):
             pmukey = "%s:%d" % (pmu.pmu_ip, pmu.pmu_port)
             data[pmukey] = dict()
