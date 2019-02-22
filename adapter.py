@@ -1,7 +1,11 @@
-from synchrophasor.pdc import Pdc
-from synchrophasor.frame import DataFrame
+from pypmu.pdc import Pdc
+from pypmu.frame import CommandFrame
+# from pypmu.frame import DataFrame
 import threading
+import struct
 from pdb import set_trace
+from pprint import *
+
 
 # class C37118Thread(threading.Thread):    
 
@@ -10,6 +14,7 @@ class C37118InputDataAdapter(object):
     def __init__(self):
         self.s = None
         self.pdc = None
+        self.phnmr = dict()
         self.dframes = dict()
         self.channel_names = dict()
         self.connection_dicts = list()
@@ -25,13 +30,12 @@ class C37118InputDataAdapter(object):
             pmu.logger.setLevel("DEBUG")
             try:
                 pmu.run()
-                pmukey = "%s:%d" % (pmu.pmu_ip, pmu.pmu_port)
-                self.channel_names[pmukey] = [chkey.replace(" ", "") for chkey in pmu.get_config().get_channel_names()]                     
                 self.pdc.append(pmu)
             except:
                 pass
         
         for pmu in self.pdc:
+            self.parse_config(pmu)
             pmu.start()
 
         # dframe_thread = threading.Thread(target=self.get_dframes)
@@ -45,8 +49,7 @@ class C37118InputDataAdapter(object):
         for i in range(0, 30):
             _dframes = list()
             for pmu in self.pdc:
-                data = pmu.get()
-                _dframes.append(data.get_measurements()["measurements"][0]["phasors"])
+                _dframes.append(pmu.get())
 
             self.lock.acquire()
             self.dframes = _dframes[:]
@@ -58,25 +61,44 @@ class C37118InputDataAdapter(object):
             return None
         
         _dframes = self.dframes[:]
-        
-        phasors = self.parse_dframes(_dframes)
+        phasors = self.parse_dframes(_dframes[0])
         
         return phasors
+
+    def parse_config(self, pmu):
+        if not pmu:
+            return None
+
+        pmukey = "%s:%d" % (pmu.pmu_ip, pmu.pmu_port)
+        self.channel_names[pmukey] = list()
+        config = pmu.get_config()
+        phnmr = struct.unpack('>h', config[40:42])[0]
+        self.phnmr[pmukey] = phnmr
+
+        chnam = ""
+        for iph in range(phnmr):
+            chnam = ""
+            for i in range(46 + 16 * iph, 46 + 16 * (iph+1)):
+                chnam += struct.unpack('>c', config[i:i+1])[0].decode("utf-8")
+            self.channel_names[pmukey].append(chnam.replace(" ", ""))
+
+        return
 
     def parse_dframes(self, dframes):
         if not dframes:
             return None
 
         data = dict()
-        for i, pmu in enumerate(self.pdc):
+        for pmu in self.pdc:
             pmukey = "%s:%d" % (pmu.pmu_ip, pmu.pmu_port)
             data[pmukey] = dict()
-            for chi, chkey in enumerate(self.channel_names[pmukey]):
-                magkey = chkey + "_mag"
-                angkey = chkey + "_ang"
-                data[pmukey][magkey] = dframes[i][chi][0]
-                data[pmukey][angkey] = dframes[i][chi][1]
 
+            for iph in range(self.phnmr[pmukey]):
+                magkey = self.channel_names[pmukey][iph] + "_mag"
+                angkey = self.channel_names[pmukey][iph] + "_ang"
+                data[pmukey][magkey] = struct.unpack('>f', dframes[16 + 8*iph:20 + 8*iph])[0]
+                data[pmukey][angkey] = struct.unpack('>f', dframes[20 + 8*iph:24 + 8*iph])[0]
+                
         return data
 
     def close(self):
