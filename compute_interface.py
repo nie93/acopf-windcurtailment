@@ -1,4 +1,5 @@
-import math
+from math import cos, sin
+from arithmetic import deg2rad
 
 
 def calculatePg(f):
@@ -26,10 +27,10 @@ def calculatePg(f):
     ig4_a = f[device_id[0]]['IAXPM_ang']
     
 
-    pg1 = 3 * vg1_m * ig1_m * math.cos(vg1_a - ig1_a)
-    pg2 = 3 * vg2_m * ig2_m * math.cos(vg2_a - ig2_a)
-    pg3 = 3 * vg3_m * ig3_m * math.cos(vg3_a - ig3_a)
-    pg4 = 3 * vg4_m * ig4_m * math.cos(vg4_a - ig4_a)
+    pg1 = 3 * vg1_m * ig1_m * cos(vg1_a - ig1_a)
+    pg2 = 3 * vg2_m * ig2_m * cos(vg2_a - ig2_a)
+    pg3 = 3 * vg3_m * ig3_m * cos(vg3_a - ig3_a)
+    pg4 = 3 * vg4_m * ig4_m * cos(vg4_a - ig4_a)
 
     return [pg1, pg2, pg3, pg4]
     

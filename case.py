@@ -85,11 +85,11 @@ class Case(object):
         const = Const()
 
         self.path       = path
-        self.bus        = np.genfromtxt(path+"bus.csv", delimiter=',')
-        self.gen        = np.genfromtxt(path+"gen.csv", delimiter=',')
-        self.branch     = np.genfromtxt(path+"branch.csv", delimiter=',')
-        self.gencost    = np.genfromtxt(path+"gencost.csv", delimiter=',')
-        self.branchrate = np.genfromtxt(path+"branchrate.csv", delimiter=',')
+        self.bus        = np.genfromtxt(os.path.join(path, "bus.csv"), delimiter=',')
+        self.gen        = np.genfromtxt(os.path.join(path, "gen.csv"), delimiter=',')
+        self.branch     = np.genfromtxt(os.path.join(path, "branch.csv"), delimiter=',')
+        self.gencost    = np.genfromtxt(os.path.join(path, "gencost.csv"), delimiter=',')
+        self.branchrate = np.genfromtxt(os.path.join(path, "branchrate.csv"), delimiter=',')
 
     def set_gen_prop(self, col, idx, value):
         self.gen[idx, col] = value

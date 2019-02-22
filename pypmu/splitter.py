@@ -1,27 +1,25 @@
-from synchrophasor.frame import *
-from synchrophasor.pdc import Pdc
-from synchrophasor.pmu import Pmu
-
+from .frame import *
+from .pdc import Pdc
+from .pmu import Pmu
 
 __author__ = "Stevan Sandi"
 __copyright__ = "Copyright (c) 2016, Tomo Popovic, Stevan Sandi, Bozo Krstajic"
 __credits__ = []
 __license__ = "BSD-3"
-__version__ = "1.0.0-aplha"
+__version__ = "0.1.1"
 
 
 class StreamSplitter(object):
 
-    def __init__(self, source_ip, source_port, listen_ip, listen_port, pdc_id=1, method="tcp", buffer_size=2048):
+    def __init__(self, source_ip, source_port, listen_ip, listen_port, pdc_id=1, method='tcp', buffer_size=2048):
 
         self.pdc = Pdc(pdc_id, source_ip, source_port, buffer_size, method)
-        self.pmu = Pmu(ip=listen_ip, port=listen_port, method=method, buffer_size=buffer_size, set_timestamp=False)
+        self.pmu = Pmu(ip=listen_ip, port=listen_port, method=method, buffer_size=buffer_size)
 
         self.source_cfg1 = None
         self.source_cfg2 = None
         self.source_cfg3 = None
         self.source_header = None
-
 
     def run(self):
 
@@ -40,7 +38,7 @@ class StreamSplitter(object):
 
             if self.pmu.clients and message:
 
-                self.pmu.send(message)
+                self.pmu.send(message, set_timestamp=False)
 
                 if isinstance(message, HeaderFrame):
                     self.pmu.set_header(message)
