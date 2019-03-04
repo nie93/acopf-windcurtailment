@@ -49,7 +49,7 @@ class opf_mdl(object):
         #
         # Example for the use of the intermediate callback.
         #
-        print "Objective value at iteration #%d is - %g" % (iter_count, obj_value)
+        print("Objective value at iteration #%d is - %g" % (iter_count, obj_value))
 
 
 def runcopf(c, flat_start):
@@ -90,36 +90,6 @@ def runcopf(c, flat_start):
     xmax[(c.bus[:, const.BUS_TYPE] == 3).nonzero()] = 0
 
     ####################################################################
-<<<<<<< HEAD
-    # Test Environment
-    #################################################################### 
-    cl = [0.]
-    cu = [0.]
-
-    nlp = ipopt.problem(n=len(x0), m=len(cl), lb=xmin, ub=xmax, cl=cl, cu=cu, \
-        problem_obj=opf_mdl(c))
-
-    res = nlp.solve(x0)
-
-    # ii = get_var_idx(c)
-    # res_va = rad2deg(res.x[ii['i1']['va']:ii['iN']['va']])
-    # res_vm = res.x[ii['i1']['vm']:ii['iN']['vm']]
-    # res_pg = res.x[ii['i1']['pg']:ii['iN']['pg']] * c.mva_base
-    # res_qg = res.x[ii['i1']['qg']:ii['iN']['qg']] * c.mva_base
-
-    # float_fmtr = {'float_kind': lambda x: "%7.3f" % x}
-
-    # print('___________')  
-    # # print('     Statue | Exit mode %d' % res.status)
-    # # print('    Message | %s' % res.message)
-    # # print('       Iter | %d' % res.nit)
-    # print('  Objective | %10.3f $/hr' % res.fun)
-    # print('  VA (deg)  | %s' % np.array2string(res_va[0:7], formatter=float_fmtr))
-    # print('  VM (pu)   | %s' % np.array2string(res_vm[0:7], formatter=float_fmtr))
-    # print('  PG (MW)   | %s' % np.array2string(res_pg, formatter=float_fmtr))
-    # print('  QG (MVAR) | %s' % np.array2string(res_qg, formatter=float_fmtr))
-    # print('___________ | ')  
-=======
     # Polynomial Cost Functions (f)
     #################################################################### 
     f_fcn   = lambda x: costfcn(x, c)
@@ -176,7 +146,6 @@ def runcopf(c, flat_start):
     print('  PG (MW)   | %s' % np.array2string(res_pg, formatter=float_fmtr))
     print('  QG (MVAR) | %s' % np.array2string(res_qg, formatter=float_fmtr))
     print('___________ | ')  
->>>>>>> dev-older-scipy
     
 
 # region [ Cost-Related Functions ]
