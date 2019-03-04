@@ -18,12 +18,13 @@ def main():
     pprint(frame)
     pg = calculatePg(frame)
     print(pg)
+#     set_trace()
 
     const = Const()
     casepath = './case14mod/'
     c = Case()
     c.import_case(casepath)
-    c.set_gen_prop(const.PMAX, [1,2,3], pg[1:4])
+#     c.set_gen_prop(const.PMAX, [1,2,3], pg[1:4])
     c.set_branch_prop('RATE', [14], [34.999])
     c.scale_branch_prop([const.BR_R, const.BR_X], multi=1.0)    
     
