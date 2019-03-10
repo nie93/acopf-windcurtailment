@@ -1,10 +1,55 @@
 from arithmetic import *
 from case import Case, Const
+# import ipopt
 import numpy as np
 from scipy.sparse import *
 from scipy.optimize import *
 from time import time
 from pdb import *
+
+class opf_mdl(object):
+    
+    def __init__(self, c):
+        self.case = c
+
+    def objective(self, x):
+        return costfcn(x, self.case)
+        
+    def gradient(self, x):
+        return costfcn_jac(x, self.case)
+
+    def constraints(self, x):       
+        const = Const() 
+        ii = get_var_idx(self.case)
+        tload = sum(self.case.bus[:,const.PD]) / self.case.mva_base
+        return sum(x[ii['i1']['pg']:ii['iN']['pg']]) - tload
+
+    def jacobian(self, x):        
+        const = Const() 
+        ii = get_var_idx(self.case)
+        simple_powerbalance = np.zeros_like(x)
+        simple_powerbalance[ii['i1']['pg']:ii['iN']['pg']] = 1
+        return simple_powerbalance
+
+    def intermediate(
+        self,
+        alg_mod,
+        iter_count,
+        obj_value,
+        inf_pr,
+        inf_du,
+        mu,
+        d_norm,
+        regularization_size,
+        alpha_du,
+        alpha_pr,
+        ls_trials
+        ):
+        
+        #
+        # Example for the use of the intermediate callback.
+        #
+        print("Objective value at iteration #%d is - %g" % (iter_count, obj_value))
 
 
 def runcopf(c, flat_start):
@@ -15,7 +60,7 @@ def runcopf(c, flat_start):
     nbr    = c.branch.shape[0]
     neq    = 2 * nb
     niq    = 2 * ng + nb + nbr
-    neqnln = 2*nb
+    neqnln = 2 * nb
     niqnln = nbr
 
     ii = get_var_idx(c)
@@ -101,6 +146,8 @@ def runcopf(c, flat_start):
     print('  PG (MW)   | %s' % np.array2string(res_pg, formatter=float_fmtr))
     print('  QG (MVAR) | %s' % np.array2string(res_qg, formatter=float_fmtr))
     print('___________ | ')  
+
+    return {'VA': res_va.tolist(), 'VM': res_vm.tolist(), 'PG': res_pg.tolist(), 'QG': res_qg.tolist()}
     
 
 # region [ Cost-Related Functions ]
