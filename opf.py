@@ -1,6 +1,10 @@
 from arithmetic import *
 from case import Case, Const
+<<<<<<< HEAD
 import ipopt
+=======
+# import ipopt
+>>>>>>> dev-older-scipy
 import numpy as np
 from scipy.sparse import *
 from scipy.optimize import *
@@ -146,6 +150,8 @@ def runcopf(c, flat_start):
     print('  PG (MW)   | %s' % np.array2string(res_pg, formatter=float_fmtr))
     print('  QG (MVAR) | %s' % np.array2string(res_qg, formatter=float_fmtr))
     print('___________ | ')  
+
+    return {'VA': res_va.tolist(), 'VM': res_vm.tolist(), 'PG': res_pg.tolist(), 'QG': res_qg.tolist()}
     
 
 # region [ Cost-Related Functions ]

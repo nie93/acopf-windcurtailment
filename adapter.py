@@ -3,8 +3,37 @@ from pypmu.frame import CommandFrame
 # from pypmu.frame import DataFrame
 import threading
 import struct
+import socket
 from pdb import set_trace
 from pprint import *
+import time
+
+
+class RtdsCmdAdapter(object):
+
+    def __init__(self, connection_dict):
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.conn_dict = connection_dict
+        
+    def connect_rtds(self):
+        self.s.connect((self.conn_dict['ip'], self.conn_dict['port'])) # RSCAD socket location
+        self.send_cmd('Start;')
+        self.send_cmd('ListenOnPortHandshake("temp_string");')
+
+        rmsg = self.s.recv(64).decode("utf-8")
+        while ('temp_string' not in rmsg):
+            rmsg = self.s.recv(64).decode("utf-8")
+        print("*    Successfully connected to RSCAD Script TCP Server.")
+
+    def send_cmd(self, cmdstr):
+        print("*    Sending command: %s." % cmdstr)
+        self.s.send(cmdstr.encode())
+
+    def close(self):
+        self.s.shutdown(socket.SHUT_RDWR)
+        self.s.close()
+        print("*    Successfully closed RSCAD Script TCP Server connection.")
+
 
 
 # class C37118Thread(threading.Thread):    
@@ -16,7 +45,7 @@ class C37118InputDataAdapter(object):
         self.pdc = None
         self.phnmr = dict()
         self.dframes = dict()
-        self.channel_names = dict()
+        self.chnme = dict()
         self.connection_dicts = list()
         self.lock = threading.Lock()
 
@@ -38,39 +67,35 @@ class C37118InputDataAdapter(object):
             self.parse_config(pmu)
             pmu.start()
 
-        # dframe_thread = threading.Thread(target=self.get_dframes)
-        # dframe_thread.start()
         self.get_dframes()
+        # set_trace()
 
     def get_dframes(self):
         if self.pdc is None:
-            return False
+            return None
 
-        for i in range(0, 30):
-            _dframes = list()
-            for pmu in self.pdc:
-                _dframes.append(pmu.get())
+        _dframes = dict()
+        for pmu in self.pdc:
+            pmukey = "%s:%d" % (pmu.pmu_ip, pmu.pmu_port)
+            _dframes[pmukey] = pmu.get()
 
-            self.lock.acquire()
-            self.dframes = _dframes[:]
-            self.lock.release()
+        # self.lock.acquire()
+        self.dframes = _dframes
+        # self.lock.release()
 
 
     def get_pmu_measurements(self):
         if not self.dframes:
             return None
         
-        _dframes = self.dframes[:]
-        phasors = self.parse_dframes(_dframes[0])
-        
-        return phasors
+        return self.parse_dframes()
 
     def parse_config(self, pmu):
         if not pmu:
             return None
 
         pmukey = "%s:%d" % (pmu.pmu_ip, pmu.pmu_port)
-        self.channel_names[pmukey] = list()
+        self.chnme[pmukey] = list()
         config = pmu.get_config()
         phnmr = struct.unpack('>h', config[40:42])[0]
         self.phnmr[pmukey] = phnmr
@@ -80,25 +105,27 @@ class C37118InputDataAdapter(object):
             chnam = ""
             for i in range(46 + 16 * iph, 46 + 16 * (iph+1)):
                 chnam += struct.unpack('>c', config[i:i+1])[0].decode("utf-8")
-            self.channel_names[pmukey].append(chnam.replace(" ", ""))
+            self.chnme[pmukey].append(chnam.replace(" ", ""))
 
         return
 
-    def parse_dframes(self, dframes):
-        if not dframes:
+    def parse_dframes(self):
+        if not self.dframes:
             return None
 
+        _dframes = self.dframes
         data = dict()
+        time.sleep(1)
         for pmu in self.pdc:
             pmukey = "%s:%d" % (pmu.pmu_ip, pmu.pmu_port)
             data[pmukey] = dict()
-
+            
             for iph in range(self.phnmr[pmukey]):
-                magkey = self.channel_names[pmukey][iph] + "_mag"
-                angkey = self.channel_names[pmukey][iph] + "_ang"
-                data[pmukey][magkey] = struct.unpack('>f', dframes[16 + 8*iph:20 + 8*iph])[0]
-                data[pmukey][angkey] = struct.unpack('>f', dframes[20 + 8*iph:24 + 8*iph])[0]
-                
+                magkey = self.chnme[pmukey][iph] + "_mag"
+                angkey = self.chnme[pmukey][iph] + "_ang"
+                data[pmukey][magkey] = struct.unpack('>f', _dframes[pmukey][16 + 8*iph:20 + 8*iph])[0]
+                data[pmukey][angkey] = struct.unpack('>f', _dframes[pmukey][20 + 8*iph:24 + 8*iph])[0]
+                      
         return data
 
     def close(self):
